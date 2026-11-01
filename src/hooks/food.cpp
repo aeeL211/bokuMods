@@ -17,7 +17,11 @@ Field idField = {};
 // does not expose that variant; the key check alone still covers the rest.
 int32_t singleId = -1;
 int32_t pluralId = -1;
-bool keepLogged = false;
+bool idsLogged = false;
+// Every eat of a food tile passes through both hooks. The first few calls are
+// logged with the tile key so a plate that still vanishes can be traced to the
+// id that stopped matching.
+int eatLogsLeft = 40;
 
 constexpr char kNeedle[] = "gingerbread";
 constexpr int32_t kNeedleLen = sizeof(kNeedle) - 1;
@@ -55,15 +59,6 @@ void* tileEntry(int32_t id) {
     return *reinterpret_cast<void**>(arrayData(tiles) + id * static_cast<ptrdiff_t>(sizeof(void*)));
 }
 
-bool isGingerbread(int32_t id) {
-    if (id < 0)
-        return false;
-    if (id == singleId || id == pluralId)
-        return true;
-    void* entry = tileEntry(id);
-    return entry && keyHasGingerbread(readPtr(entry, keyField));
-}
-
 bool walkRefs(void*& obj, Field& f, const char* const* names, int count) {
     for (int i = 0; i < count; i++) {
         if (!resolveField(fieldClass(f), names[i], f))
@@ -92,23 +87,69 @@ int32_t resolveVariant(const char* const* names, int count, const char* leaf) {
     return readInt(obj, f);
 }
 
+// _Tile.id is filled when the game builds its table, which happens after the
+// hooks are installed, so the ids are looked up on first use instead of at
+// startup. -1 means "not readable yet", not "missing".
+void resolveIds() {
+    if ((singleId >= 0 && pluralId >= 0) || !tileClass || !idField.field)
+        return;
+    static const char* const kSingle[] = {"christmas", "gingerbread_Man", "std"};
+    static const char* const kPlural[] = {"christmas", "gingerbread_Man", "plate", "blk"};
+    if (singleId < 0)
+        singleId = resolveVariant(kSingle, 3, "single");
+    if (pluralId < 0)
+        pluralId = resolveVariant(kPlural, 4, "plural");
+    if (!idsLogged && (singleId >= 0 || pluralId >= 0)) {
+        idsLogged = true;
+        LOGI("Gingerbread ids: single=%d plural=%d", singleId, pluralId);
+    }
+}
+
+bool isGingerbread(int32_t id) {
+    if (id < 0)
+        return false;
+    resolveIds();
+    if (id == singleId || id == pluralId)
+        return true;
+    void* entry = tileEntry(id);
+    return entry && keyHasGingerbread(readPtr(entry, keyField));
+}
+
+void logEat(const char* kind, int32_t id, bool keep) {
+    if (eatLogsLeft <= 0)
+        return;
+    eatLogsLeft--;
+    void* entry = tileEntry(id);
+    void* key = entry ? readPtr(entry, keyField) : nullptr;
+    const uint16_t* chars = stringChars(key);
+    int32_t len = stringLength(key);
+    char text[52] = {};
+    if (chars) {
+        int32_t n = len < 48 ? len : 48;
+        for (int32_t i = 0; i < n; i++) {
+            uint16_t c = chars[i];
+            text[i] = c >= 0x20 && c < 0x7F ? static_cast<char>(c) : '?';
+        }
+    }
+    LOGI("Eat %s: id=%d keep=%d key=%s", kind, id, keep ? 1 : 0, text);
+}
+
 // Gingerbread is a Christmas tile the tile converter does not know, so the eat
 // path deletes the plate instead of changing it. Claim the id and re-record the
 // tile as itself, which keeps the plate on the map for the next bite.
 bool termHook(void* self, int32_t id, void* method) {
-    if (isGingerbread(id)) {
-        if (!keepLogged) {
-            keepLogged = true;
-            LOGI("Gingerbread kept: tile %d", id);
-        }
+    bool keep = isGingerbread(id);
+    logEat("term", id, keep);
+    if (keep)
         return true;
-    }
     auto orig = reinterpret_cast<bool (*)(void*, int32_t, void*)>(target(T_EAT_CHANGE_TERM).orig);
     return orig ? orig(self, id, method) : false;
 }
 
 int32_t addHook(void* self, int32_t id, void* method) {
-    if (isGingerbread(id))
+    bool keep = isGingerbread(id);
+    logEat("add", id, keep);
+    if (keep)
         return id;
     auto orig = reinterpret_cast<int32_t (*)(void*, int32_t, void*)>(target(T_EAT_CHANGE_ADD).orig);
     return orig ? orig(self, id, method) : id;
@@ -123,13 +164,7 @@ void installFoodHooks() {
         LOGE("Tile table not found; unlimited gingerbread disabled");
         return;
     }
-    if (resolveField(tileClass, "id", idField)) {
-        static const char* const kSingle[] = {"christmas", "gingerbread_Man", "std"};
-        static const char* const kPlural[] = {"christmas", "gingerbread_Man", "plate", "blk"};
-        singleId = resolveVariant(kSingle, 3, "single");
-        pluralId = resolveVariant(kPlural, 4, "plural");
-        LOGI("Gingerbread ids: single=%d plural=%d", singleId, pluralId);
-    }
+    resolveField(tileClass, "id", idField);
 
     installHook(target(T_EAT_CHANGE_TERM), reinterpret_cast<void*>(termHook),
                 "Converter__Tile__Type.Term__Eat__Tile__Change");
