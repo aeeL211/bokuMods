@@ -2,6 +2,7 @@
 
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <link.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <ucontext.h>
@@ -235,6 +236,48 @@ struct SigSlot {
     struct sigaction prev;
 };
 
+// Return addresses on the crashing stack name the caller chain, but resolving
+// them with dladdr() would take the linker lock in a process that is already
+// broken. The module ranges are therefore snapshotted once, before any crash,
+// and the handler only compares numbers.
+struct Module {
+    const char* name;
+    uintptr_t start;
+    uintptr_t end;
+};
+
+constexpr int kMaxModules = 32;
+Module modules[kMaxModules] = {};
+int moduleCount = 0;
+
+int gatherModule(struct dl_phdr_info* info, size_t, void*) {
+    if (moduleCount >= kMaxModules)
+        return 1;
+    if (!info->dlpi_name || !info->dlpi_name[0])
+        return 0;
+    uintptr_t start = UINTPTR_MAX;
+    uintptr_t end = 0;
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr)& ph = info->dlpi_phdr[i];
+        if (ph.p_type != PT_LOAD)
+            continue;
+        uintptr_t lo = info->dlpi_addr + ph.p_vaddr;
+        uintptr_t hi = lo + ph.p_memsz;
+        if (lo < start)
+            start = lo;
+        if (hi > end)
+            end = hi;
+    }
+    if (end <= start)
+        return 0;
+    const char* slash = strrchr(info->dlpi_name, '/');
+    modules[moduleCount].name = slash ? slash + 1 : info->dlpi_name;
+    modules[moduleCount].start = start;
+    modules[moduleCount].end = end;
+    moduleCount++;
+    return 0;
+}
+
 SigSlot sigSlots[] = {
     {SIGSEGV, {}},
     {SIGBUS, {}},
@@ -270,6 +313,24 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
     int fd = logFd;
     if (n > 0 && fd >= 0)
         write(fd, line, static_cast<size_t>(n));
+
+    // Only words that fall inside a known module are printed, so heap values
+    // and stale stack data stay out of the log.
+    uintptr_t sp = static_cast<uintptr_t>(uc->uc_mcontext.sp);
+    int shown = 0;
+    for (int i = 0; i < 192 && shown < 10; i++) {
+        uintptr_t candidate = reinterpret_cast<const uintptr_t*>(sp)[i];
+        for (int m = 0; m < moduleCount; m++) {
+            if (candidate < modules[m].start || candidate >= modules[m].end)
+                continue;
+            n = snprintf(line, sizeof(line), "[%s] ERROR CRASH frame %s+0x%lx\n", clock,
+                         modules[m].name, static_cast<unsigned long>(candidate - modules[m].start));
+            if (n > 0 && fd >= 0)
+                write(fd, line, static_cast<size_t>(n));
+            shown++;
+            break;
+        }
+    }
     for (SigSlot& slot : sigSlots) {
         if (slot.sig == sig) {
             sigaction(sig, &slot.prev, nullptr);
@@ -350,6 +411,7 @@ void logPrint(char level, const char* fmt, ...) {
 }
 
 void installCrashLog() {
+    dl_iterate_phdr(gatherModule, nullptr);
     for (SigSlot& slot : sigSlots) {
         struct sigaction action = {};
         action.sa_sigaction = crashHandler;

@@ -42,6 +42,9 @@ void okHook(void* self, void* method) {
         LOGE("Password: room fields missing, compare runs as-is");
     }
     orig(self, method);
+    // Reaching this line tells the log that the gated path completed, so a
+    // crash right after is outside Input__Ok.
+    LOGI("Password: ok returned");
 }
 
 // The keyboard path forwards _password.str as its initial text, so a null there
@@ -53,7 +56,11 @@ void fieldHook(void* self, bool touch, void* method) {
     if (!orig)
         return;
     void* value = readPtr(self, passwordField);
-    if (value && !readPtr(value, strField)) {
+    void* str = value ? readPtr(value, strField) : nullptr;
+    // The panel hands this string to the keyboard, so log it before the original
+    // runs: a null or stale pointer here is what the engine then chokes on.
+    LOGI("Password field: touch=%d str=%p", touch ? 1 : 0, str);
+    if (value && !str) {
         void* empty = newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0);
         if (empty)
             setRef(value, strField, empty);

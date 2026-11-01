@@ -40,6 +40,9 @@ void keyboardOpenHook(void* self, int32_t s, int32_t type, void* text, int32_t, 
         target(T_KEYBOARD_OPEN).orig);
     if (!orig)
         return;
+    // Names the string the engine is about to convert, so a bad pointer shows up
+    // in the log right before the crash instead of only in the fault address.
+    LOGI("Keyboard: s=%d type=%d text=%p", s, type, text);
     orig(self, s, type, text, 0, method);
 }
 
