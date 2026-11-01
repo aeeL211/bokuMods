@@ -33,6 +33,14 @@ void insertHook(void* self, void* text, void* method) {
     orig(self, text, method);
 }
 
+// The keyboard converts this string to UTF-8 and walks its characters up to the
+// length in its header. A string whose header no longer holds a sane length
+// makes that walk run past the heap, so hand over a fresh empty string instead
+// of letting the engine scan unmapped memory.
+constexpr int32_t kMaxKeyboardLen = 4096;
+
+void* emptyString() { return newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0); }
+
 // Length is unused on the mobile path, but the Steam/gamepad path forwards it
 // to its own text input. Zero means no character limit there.
 void keyboardOpenHook(void* self, int32_t s, int32_t type, void* text, int32_t, void* method) {
@@ -40,9 +48,15 @@ void keyboardOpenHook(void* self, int32_t s, int32_t type, void* text, int32_t, 
         target(T_KEYBOARD_OPEN).orig);
     if (!orig)
         return;
+    int32_t len = stringLength(text);
     // Names the string the engine is about to convert, so a bad pointer shows up
     // in the log right before the crash instead of only in the fault address.
-    LOGI("Keyboard: s=%d type=%d text=%p", s, type, text);
+    LOGI("Keyboard: s=%d type=%d text=%p len=%d", s, type, text, len);
+    if (!text || len < 0 || len > kMaxKeyboardLen) {
+        void* empty = emptyString();
+        if (empty)
+            text = empty;
+    }
     orig(self, s, type, text, 0, method);
 }
 

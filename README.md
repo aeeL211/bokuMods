@@ -18,7 +18,7 @@ statis ke dalam `libfebrian.so`.
 | Nama profil panjang | Ya | Batas nama dinaikkan, bukan hanya batas field |
 | Hari/tahun lahir tanpa batas | Ya | Hari 31 dan tahun 9999 terbuka; bulan tetap 12 |
 | Save world tanpa izin host | Ya | Hanya save-world; build/destroy tetap milik host |
-| Join room ber-password tanpa mengetik | Ya | Kotak password tetap kosong, tombol OK tetap aktif |
+| Join room ber-password tanpa mengetik | Ya | Kotak password tidak perlu diisi, tombol OK tetap aktif |
 | Posisi X/Y skin -20..20 | Ya | Berlaku di model dan portrait; sumbu rotate tidak diubah |
 | Makan gingerbread tanpa batas | Ya | Kue tidak hilang setelah dimakan; berlaku untuk semua varian gingerbread |
 | Versi game berlabel "(modded)" | Ya | Teks versi asli di halaman About ditambah akhiran |
