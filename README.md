@@ -41,10 +41,12 @@ build juga membutuhkan `libc++_shared.so`, sertakan library tersebut.
 Mod menampilkan dua pesan:
 
 - `MODS: Logged in as <nama>` saat mod aktif. Nama dibaca dari
-  `Android/data/com.pixticle.bokuboku.mods/files/Setting/User_Name.txt` sebagai UTF-8, spasi di
-  awal dan akhir dibuang, dan nama lebih dari 20 karakter dipotong pada batas karakter lalu
-  diberi `"..."`. Kalau file tidak ada, kosong, tidak bisa dibaca, atau bukan UTF-8 yang valid,
-  toast menjadi `MODS: Logged in` dan alasannya dicatat di log.
+  `Android/data/com.pixticle.bokuboku.mods/files/Setting/User_Name.txt`, spasi di awal dan akhir
+  dibuang, dan nama lebih dari 20 karakter dipotong pada batas karakter lalu diberi `"..."`.
+  Encoding file tidak harus UTF-8: file dengan BOM UTF-16 dibaca sebagai UTF-16, dan byte yang
+  bukan UTF-8 yang valid dibaca sebagai Latin-1, jadi nama dari editor lama tetap tampil. Kalau
+  file tidak ada, kosong, atau tidak bisa dibaca, toast menjadi `MODS: Logged in` dan alasannya
+  dicatat di log.
 - `MODS: Purchase simulated successfully` setiap kali pembelian dialihkan tanpa Play Billing.
 
 ## Yang tidak bisa
@@ -75,15 +77,16 @@ Log hanya ditulis ke file, tidak ke logcat, di
 [15:14:12] INFO  Library loaded
 [15:14:13] INFO  ShadowHook initialized
 [15:14:15] INFO  Scan done: found 22 of 22 methods
-[15:14:15] INFO  Gingerbread ids: single=1234 plural=1235
+[15:14:15] INFO  Password room fields OK
 [15:14:15] INFO  Hooked UIInput.Insert at 0x... (a64)
 [15:14:15] INFO  Hooked Converter__Tile__Type.Eat__Tile__Change__Add at 0x... (a64)
 ```
 
 File lama tidak dihapus: file dibuka dengan mode append, jadi tiap sesi menambah baris di
 bawahnya dan diawali baris `Log start`. Kalau file lama tidak bisa ditambah, mod mencoba
-memperbaiki permission, lalu memakai `bokumods-2.log` sebagai nama cadangan dan mencatat
-alasannya. Baris yang muncul sebelum folder log siap disimpan dulu di memori lalu ditulis saat
+memperbaiki permission, lalu memakai `bokumods-2.log` sampai `bokumods-9.log` sebagai nama
+cadangan dan mencatat alasannya. File lama tetap utuh dengan semua barisnya.
+Baris yang muncul sebelum folder log siap disimpan dulu di memori lalu ditulis saat
 file berhasil dibuka, jadi baris awal tidak hilang.
 
 Kalau proses mati karena fault, handler sinyal menulis baris `ERROR CRASH` berisi sinyal,

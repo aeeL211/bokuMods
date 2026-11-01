@@ -175,19 +175,10 @@ bool legacyDir(char* out, size_t size) {
     return true;
 }
 
-// Deleting the previous log only helps when the file itself blocks the append.
-// A missing directory, a full disk, or an unavailable mount is not fixed by
-// removing data, so the destructive step is limited to permission errors on an
-// existing regular file.
-bool isFile(const char* path) {
-    struct stat st = {};
-    return lstat(path, &st) == 0 && S_ISREG(st.st_mode);
-}
-
 // A previous session can leave a file this process may not append to (other
-// owner or read-only mode). Plain open() would then fail on every run and the
-// log would look dead, so repair the file step by step instead of giving up on
-// the first error.
+// owner or read-only mode). The permission is repaired once, and a file that is
+// still not writable is left alone: dropping it would erase the old session,
+// while the caller can continue in a second name.
 int openPath(const char* path, int* err) {
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd >= 0)
@@ -197,14 +188,6 @@ int openPath(const char* path, int* err) {
         return -1;
 
     chmod(path, 0666);
-    fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
-    if (fd >= 0)
-        return fd;
-    *err = errno;
-    if ((*err != EACCES && *err != EPERM) || !isFile(path))
-        return -1;
-
-    unlink(path);
     fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd >= 0)
         return fd;
@@ -362,14 +345,14 @@ void logOpenFile() {
     int fd = openPath(path, &err);
     char used[512];
     snprintf(used, sizeof(used), "%s", path);
-    if (fd < 0) {
-        // The path itself may be unusable, but the directory is ours: a second name
-        // still gives us a log for this run.
-        snprintf(used, sizeof(used), "%s/bokumods-2.log", dir);
+    // The directory is ours, so a second name still gives this run a log. The
+    // previous file stays in place with every line it already had.
+    for (int i = 2; fd < 0 && i <= 9; i++) {
+        snprintf(used, sizeof(used), "%s/bokumods-%d.log", dir, i);
         fd = openPath(used, &err);
-        if (fd < 0)
-            return;
     }
+    if (fd < 0)
+        return;
     logFd = fd;
 
     char clock[16];
