@@ -28,6 +28,8 @@ Target targets[T_COUNT] = {
     {"UI__Menu__Model__Main__Pos", "Refresh__Step", 0, nullptr, nullptr, nullptr},
     {"Net__Account__Portrait__Main__Pos", "Refresh__Step", 0, nullptr, nullptr, nullptr},
     {"UI__Menu__Option__About", "Refresh__Version__Version", 0, nullptr, nullptr, nullptr},
+    {"Title__Cmn", "Version__Text", 0, nullptr, nullptr, nullptr},
+    {"UI__Menu__Net__Multi__Help", "Refresh__Version__Text", 0, nullptr, nullptr, nullptr},
     {"UI__Menu__Net__Multi__Join__Room_List__Detail__Password", "Term__Bottom_Button", 0, nullptr,
      nullptr, nullptr},
     {"_Tile", "Key__To__Id", 1, nullptr, nullptr, nullptr},

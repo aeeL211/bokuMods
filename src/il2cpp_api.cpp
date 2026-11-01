@@ -32,6 +32,8 @@ ClassSlot classes[] = {
     {"UI__Menu__Model__Main__Pos", nullptr},
     {"Net__Account__Portrait__Main__Pos", nullptr},
     {"UI__Menu__Option__About", nullptr},
+    {"Title__Cmn", nullptr},
+    {"UI__Menu__Net__Multi__Help", nullptr},
     {"_Tile", nullptr},
 };
 
