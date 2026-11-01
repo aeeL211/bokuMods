@@ -21,7 +21,7 @@ statis ke dalam `libfebrian.so`.
 | Join room ber-password tanpa mengetik | Ya | Kotak password tidak perlu diisi, tombol OK tetap aktif |
 | Posisi X/Y skin -20..20 | Ya | Berlaku di model dan portrait; sumbu rotate tidak diubah |
 | Makan gingerbread tanpa batas | Ya | Kue tetap di tangan setelah 3 gigitan, jadi bisa dimakan terus |
-| Versi game berlabel "(modded)" | Ya | Teks versi asli di halaman About ditambah akhiran |
+| Versi game berlabel "(modded)" | Ya | Halaman About, layar judul, dan halaman bantuan multiplayer memakai akhiran yang sama |
 | Toast saat mod aktif | Ya | `MODS: Logged in as <nama>`; nama diambil dari `User_Name.txt` |
 | Join room yang penuh | Tidak | Dibatasi host dan Photon |
 
@@ -76,7 +76,7 @@ Log hanya ditulis ke file, tidak ke logcat, di
 [15:14:12] INFO  Log file: /storage/emulated/0/Android/data/com.pixticle.bokuboku/files/bokumods.log (append)
 [15:14:12] INFO  Library loaded
 [15:14:13] INFO  ShadowHook initialized
-[15:14:15] INFO  Scan done: found 27 of 27 methods
+[15:14:15] INFO  Scan done: found 29 of 29 methods
 [15:14:15] INFO  Password room fields OK
 [15:14:15] INFO  Hooked UIInput.Insert at 0x... (a64)
 [15:14:15] INFO  Hooked Converter__Tile__Type.Eat__Tile__Change__Add at 0x... (a64)
