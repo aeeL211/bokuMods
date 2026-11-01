@@ -1,0 +1,223 @@
+name: Build febrian
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      log:
+        description: "Enable file logging (off = smallest .so)"
+        type: boolean
+        default: true
+      shadowhook_tag:
+        description: "ShadowHook upstream tag to fetch (built statically, never vendored)"
+        type: string
+        default: "v2.0.1"
+      runner:
+        description: "Runner image label"
+        type: string
+        default: "ubuntu-24.04"
+
+env:
+  # Pinned in one place. 1.1.1 is known broken (error 12 on many devices,
+  # upstream issue #91); the tag is checked against shadowhook.h below.
+  SHADOWHOOK_TAG: ${{ inputs.shadowhook_tag || 'v2.0.1' }}
+
+jobs:
+  # Formatting is advisory: it never gates the .so, so a style-only difference
+  # cannot block a build. The patch artifact is the exact fix.
+  format:
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install clang-format
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang-format
+
+      - name: Check formatting
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.cpp' '*.h')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No C++ sources tracked"
+            exit 0
+          fi
+          echo "Checking ${#files[@]} files"
+          if clang-format --dry-run --Werror "${files[@]}"; then
+            echo "Formatting OK"
+            exit 0
+          fi
+          clang-format -i "${files[@]}"
+          git diff > "$RUNNER_TEMP/format.patch"
+          {
+            echo "### clang-format differences"
+            echo 'Download the `format-patch` artifact and run `git apply format.patch`.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::clang-format found differences, see the format-patch artifact"
+          exit 1
+
+      - name: Upload format patch
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: format-patch
+          path: ${{ runner.temp }}/format.patch
+          if-no-files-found: ignore
+
+  build:
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1.6.0
+        with:
+          ndk-version: r30
+          add-to-path: false
+
+      - name: Check CMake
+        run: |
+          set -euo pipefail
+          cmake --version | head -1
+          major="$(cmake --version | sed -n 's/^cmake version \([0-9]*\)\..*/\1/p')"
+          if [ "${major:-0}" -lt 3 ]; then
+            echo "::error::CMake 3.20 or newer is required"
+            exit 1
+          fi
+
+      - name: Fetch ShadowHook source
+        run: |
+          set -euo pipefail
+          TAG="$SHADOWHOOK_TAG"
+          URL="https://github.com/bytedance/android-inline-hook/archive/refs/tags/${TAG}.tar.gz"
+          curl -fsSL --retry 3 -o shadowhook.tar.gz "$URL"
+          mkdir -p shadowhook
+          tar -xzf shadowhook.tar.gz -C shadowhook --strip-components=1
+
+          HDR="shadowhook/shadowhook/src/main/cpp/include/shadowhook.h"
+          [ -f "$HDR" ] || { echo "::error::shadowhook.h missing after extract"; exit 1; }
+
+          # A moved or mistyped tag must fail here, not at link time.
+          WANT="${TAG#v}"
+          HAVE="$(sed -n 's/^#define SHADOWHOOK_VERSION "\(.*\)"$/\1/p' "$HDR")"
+          echo "ShadowHook tag=$TAG header version=$HAVE"
+          [ "$HAVE" = "$WANT" ] || { echo "::error::tag $TAG does not contain version $WANT"; exit 1; }
+
+          # The JNI shim would define a second JNI_OnLoad; the static build in
+          # CMakeLists.txt excludes it and links everything else.
+          [ -f "shadowhook/shadowhook/src/main/cpp/sh_jni.c" ] \
+            || { echo "::error::upstream layout changed"; exit 1; }
+          ls shadowhook/shadowhook/src/main/cpp/arch/arm64/sh_glue.S
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build/${{ matrix.abi }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSHADOWHOOK_ROOT=${{ github.workspace }}/shadowhook \
+            -DBOKU_LOG=${{ (github.event_name == 'workflow_dispatch' && !inputs.log) && 'OFF' || 'ON' }}
+
+      - name: Build
+        run: cmake --build build/${{ matrix.abi }} --config Release -j$(nproc)
+
+      - name: Collect artifact
+        run: |
+          set -euo pipefail
+          OUT="dist/lib/${{ matrix.abi }}"
+          mkdir -p "$OUT"
+          cp "build/${{ matrix.abi }}/lib/${{ matrix.abi }}/libfebrian.so" "$OUT/"
+          cp "shadowhook/LICENSE" "$OUT/LICENSE-shadowhook"
+          cp "shadowhook/shadowhook/src/main/cpp/third_party/xdl/LICENSE" "$OUT/LICENSE-xdl"
+          cp "shadowhook/shadowhook/src/main/cpp/third_party/lss/LICENSE" "$OUT/LICENSE-lss"
+          {
+            echo "ShadowHook ${SHADOWHOOK_TAG}"
+            echo "  MIT, https://github.com/bytedance/android-inline-hook"
+            echo
+            cat "$OUT/LICENSE-shadowhook"
+            echo
+            echo "xdl (bundled with ShadowHook)"
+            echo "  Apache License 2.0"
+            cat "$OUT/LICENSE-xdl"
+            echo
+            echo "linux-syscall-support (bundled with ShadowHook)"
+            echo "  Apache License 2.0"
+            cat "$OUT/LICENSE-lss"
+          } > "$OUT/THIRD_PARTY_LICENSES"
+          rm -f "$OUT"/LICENSE-*
+          ls -l "$OUT"
+          wc -c "$OUT/libfebrian.so"
+
+      - name: Verify ELF and exports
+        run: |
+          set -euo pipefail
+          RE="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          OUT="dist/lib/${{ matrix.abi }}"
+          SO="$OUT/libfebrian.so"
+
+          [ -f "$SO" ] || { echo "::error::libfebrian.so was not produced"; exit 1; }
+          echo "== $(basename "$SO")"
+          "$RE" -h "$SO" | grep -E "Class:|Machine:"
+          "$RE" -h "$SO" | grep -Eq "Class: +ELF64$"   || { echo "::error::wrong ELF class"; exit 1; }
+          "$RE" -h "$SO" | grep -Eq "Machine: +AArch64$" || { echo "::error::wrong machine"; exit 1; }
+          "$RE" -d "$SO" | grep -E "NEEDED|SONAME" || true
+
+          # Static linking is the point: the shared ShadowHook must be gone.
+          if "$RE" -d "$SO" | grep -q "libshadowhook"; then
+            echo "::error::libfebrian.so still needs libshadowhook.so"
+            exit 1
+          fi
+
+          # The archive and the shadowhook sources must not leak into .dynsym.
+          if "$RE" --dyn-syms "$SO" | grep -Eq " (shadowhook_|sh_)[A-Za-z0-9_]"; then
+            echo "::error::ShadowHook symbols are exported"
+            "$RE" --dyn-syms "$SO" | grep -E " (shadowhook_|sh_)[A-Za-z0-9_]"
+            exit 1
+          fi
+
+          # ART resolves JNI_OnLoad from the loaded library itself.
+          "$RE" --dyn-syms "$SO" | grep -Eq "FUNC +GLOBAL +DEFAULT +[0-9]+ JNI_OnLoad$" \
+            || { echo "::error::libfebrian.so does not export JNI_OnLoad"; exit 1; }
+
+          [ "$(basename "$SO")" = "libfebrian.so" ] \
+            || { echo "::error::output name is not libfebrian.so"; exit 1; }
+
+          # Informational: a shared C++ runtime would have to be packaged too
+          if "$RE" -d "$SO" | grep -q "libc++_shared"; then
+            echo "::warning::libfebrian.so needs libc++_shared.so"
+          fi
+
+      - name: Upload artifact (per ABI)
+        uses: actions/upload-artifact@v7
+        with:
+          name: libfebrian-${{ matrix.abi }}
+          path: dist/
+          if-no-files-found: error
+
+  package:
+    needs: build
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: libfebrian-*
+          merge-multiple: true
+          path: dist
+
+      - name: Show final tree
+        run: find dist -type f | sort
+
+      - name: Upload combined artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: libfebrian-all
+          path: dist/
+          if-no-files-found: error
