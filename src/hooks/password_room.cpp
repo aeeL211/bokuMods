@@ -13,6 +13,28 @@ Field strField = {};
 Field roomDataField = {};
 Field roomPasswordField = {};
 
+// A room password is a few characters. Anything past this is a stale object
+// whose header was reused, not a real string, and passing it to the keyboard
+// makes Unity scan past the end of the heap.
+constexpr int32_t kMaxPasswordLen = 4096;
+
+bool usableString(void* str) {
+    if (!str)
+        return false;
+    int32_t len = stringLength(str);
+    return len >= 0 && len <= kMaxPasswordLen;
+}
+
+void* emptyString() { return newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0); }
+
+// Copies a managed string into a fresh object. The copy is what keeps the value
+// alive; the room data that owns the original is torn down by the join.
+void* copyString(void* str) {
+    if (!usableString(str))
+        return nullptr;
+    return newUtf16String(stringChars(str), stringLength(str));
+}
+
 // Term__Bottom_Button() is the enabled state of the OK button: it reports
 // whether _password.str differs from the empty string. Input__Ok() returns
 // immediately when it is false, and the button itself is dimmed, so an empty
@@ -23,10 +45,10 @@ bool buttonHook(void*, void*) { return true; }
 
 // Input__Ok compares _password.str with detail._room_Data.password and only then
 // closes the keyboard and calls Join__Start. That comparison is a local UI gate:
-// Join__Start joins with _room_Data.key and never reads the password. The box
-// stays empty, so copy the room's own password into _password.str before the
-// compare. It then matches itself, the rest of the flow (keyboard close, cursor
-// refresh, join) still runs, and the real password reaches the join path.
+// Join__Start joins with _room_Data.key and never reads the password, so a copy
+// of the room's own password passes it. The copy is replaced again once the
+// original returns, because Join__Start destroys the room data and a string
+// borrowed from there would outlive its owner in the panel.
 void okHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_PASSWORD_OK).orig);
     if (!orig)
@@ -35,13 +57,22 @@ void okHook(void* self, void* method) {
     void* roomData = readPtr(detail, roomDataField);
     void* roomPassword = readPtr(roomData, roomPasswordField);
     void* value = readPtr(self, passwordField);
-    if (roomPassword && value && strField.field) {
-        LOGI("Password: room password applied, len=%d", stringLength(roomPassword));
-        setRef(value, strField, roomPassword);
+    void* previous = (value && strField.field) ? readPtr(value, strField) : nullptr;
+    void* copy = copyString(roomPassword);
+    if (value && copy) {
+        LOGI("Password: room password applied, len=%d", stringLength(copy));
+        setRef(value, strField, copy);
     } else {
         LOGE("Password: room fields missing, compare runs as-is");
     }
     orig(self, method);
+    if (value && strField.field) {
+        // A previous value that no longer reads as a short string is dropped
+        // instead of being written back.
+        void* restore = usableString(previous) ? previous : emptyString();
+        if (restore)
+            setRef(value, strField, restore);
+    }
     // Reaching this line tells the log that the gated path completed, so a
     // crash right after is outside Input__Ok.
     LOGI("Password: ok returned");
@@ -49,8 +80,8 @@ void okHook(void* self, void* method) {
 
 // The keyboard path forwards _password.str as its initial text, so a null there
 // aborts before the field opens. _Start normally writes an empty string; seed
-// one when it is missing instead of writing the room password, which would show
-// up in the box.
+// one when it is missing, and replace a value whose header no longer reads as a
+// short string, which is what the engine chokes on.
 void fieldHook(void* self, bool touch, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, bool, void*)>(target(T_PASSWORD_FIELD).orig);
     if (!orig)
@@ -59,9 +90,9 @@ void fieldHook(void* self, bool touch, void* method) {
     void* str = value ? readPtr(value, strField) : nullptr;
     // The panel hands this string to the keyboard, so log it before the original
     // runs: a null or stale pointer here is what the engine then chokes on.
-    LOGI("Password field: touch=%d str=%p", touch ? 1 : 0, str);
-    if (value && !str) {
-        void* empty = newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0);
+    LOGI("Password field: touch=%d str=%p len=%d", touch ? 1 : 0, str, stringLength(str));
+    if (value && !usableString(str)) {
+        void* empty = emptyString();
         if (empty)
             setRef(value, strField, empty);
     }
