@@ -159,8 +159,7 @@ uint32_t readCodePoint(const char* s, size_t len) {
         return ((p[0] & 0x1Fu) << 6) | (p[1] & 0x3Fu);
     if (len == 3)
         return ((p[0] & 0x0Fu) << 12) | ((p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu);
-    return ((p[0] & 0x07u) << 18) | ((p[1] & 0x3Fu) << 12) | ((p[2] & 0x3Fu) << 6) |
-           (p[3] & 0x3Fu);
+    return ((p[0] & 0x07u) << 18) | ((p[1] & 0x3Fu) << 12) | ((p[2] & 0x3Fu) << 6) | (p[3] & 0x3Fu);
 }
 
 size_t encodeUtf8(uint32_t code, char* out) {
