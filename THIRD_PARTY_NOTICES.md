@@ -12,6 +12,11 @@ every component is fetched from its upstream release at build time.
 - How it is used: the upstream source archive is extracted during the CI build and compiled
   into `libfebrian.so` as a static archive. `sh_jni.c` is excluded, so the binary contains no
   ShadowHook `JNI_OnLoad`. Public ShadowHook symbols are hidden and are not exported.
+- Local modification: one call in `shadowhook.c` is rewritten at build time so that a failed
+  `sh_linker_init()` is not fatal. A single-file build ships no `libshadowhook_nothing.so`, and
+  upstream uses that stub for the soinfo field-offset scan. The scan serves
+  `shadowhook_hook_sym_name` and dlopen tracking, neither of which this mod calls;
+  `shadowhook_hook_func_addr`, the only API used here, is unaffected.
 
 ## xdl
 

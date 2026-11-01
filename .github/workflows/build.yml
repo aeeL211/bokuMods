@@ -115,6 +115,38 @@ jobs:
             || { echo "::error::upstream layout changed"; exit 1; }
           ls shadowhook/shadowhook/src/main/cpp/arch/arm64/sh_glue.S
 
+      - name: Patch ShadowHook for static linking
+        run: |
+          set -euo pipefail
+          # A statically linked ShadowHook still dlopen()s libshadowhook_nothing.so
+          # inside sh_linker_init() to locate the soinfo field offsets. This build
+          # ships one file, so the stub is absent and the scan fails, which would
+          # abort shadowhook_init() with errno 12 before any hook is installed.
+          # Only shadowhook_hook_func_addr() is used here: the dlopen tracking that
+          # needs those offsets is unused, and every consumer of them is gated by
+          # soinfo_offset_scan_ok, so linker init must not be fatal.
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          path = pathlib.Path("shadowhook/shadowhook/src/main/cpp/shadowhook.c")
+          source = path.read_text()
+          original = (
+              "      if (__predict_false(0 != sh_linker_init())) "
+              "GOTO_END(SHADOWHOOK_ERRNO_INIT_LINKER);\n"
+          )
+          patched = (
+              "      // Static build ships no libshadowhook_nothing.so: linker init is optional.\n"
+              "      (void)sh_linker_init();\n"
+          )
+          if source.count(original) != 1:
+              sys.exit("patch: sh_linker_init call not found, upstream layout changed")
+
+          path.write_text(source.replace(original, patched))
+          print("patched", path)
+          PY
+          grep -n "sh_linker_init" shadowhook/shadowhook/src/main/cpp/shadowhook.c
+
       - name: Configure CMake
         run: |
           cmake -S . -B build/${{ matrix.abi }} \
