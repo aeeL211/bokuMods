@@ -108,8 +108,10 @@ void* toastThread(void* arg) {
     return nullptr;
 }
 
-// A stray control byte or invalid sequence would show up as garbage in the
-// toast, so the file is rejected instead of being displayed as-is.
+// A name file can come from any editor, so it is read as bytes first and never
+// rejected for its encoding. Valid UTF-8 is kept as-is, a UTF-16 byte order mark
+// switches to a UTF-16 decode, and every other byte is read as Latin-1 so a
+// legacy file still shows readable characters instead of an empty toast.
 bool isSpace(unsigned char c) {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
 }
@@ -147,6 +149,99 @@ size_t utf8Length(const char* s, size_t avail) {
     if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
         return 0;
     return len;
+}
+
+uint32_t readCodePoint(const char* s, size_t len) {
+    const auto* p = reinterpret_cast<const unsigned char*>(s);
+    if (len == 1)
+        return p[0];
+    if (len == 2)
+        return ((p[0] & 0x1Fu) << 6) | (p[1] & 0x3Fu);
+    if (len == 3)
+        return ((p[0] & 0x0Fu) << 12) | ((p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu);
+    return ((p[0] & 0x07u) << 18) | ((p[1] & 0x3Fu) << 12) | ((p[2] & 0x3Fu) << 6) |
+           (p[3] & 0x3Fu);
+}
+
+size_t encodeUtf8(uint32_t code, char* out) {
+    if (code < 0x80) {
+        out[0] = static_cast<char>(code);
+        return 1;
+    }
+    if (code < 0x800) {
+        out[0] = static_cast<char>(0xC0 | (code >> 6));
+        out[1] = static_cast<char>(0x80 | (code & 0x3F));
+        return 2;
+    }
+    if (code < 0x10000) {
+        out[0] = static_cast<char>(0xE0 | (code >> 12));
+        out[1] = static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+        out[2] = static_cast<char>(0x80 | (code & 0x3F));
+        return 3;
+    }
+    out[0] = static_cast<char>(0xF0 | (code >> 18));
+    out[1] = static_cast<char>(0x80 | ((code >> 12) & 0x3F));
+    out[2] = static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+    out[3] = static_cast<char>(0x80 | (code & 0x3F));
+    return 4;
+}
+
+struct NameBuffer {
+    char* out;
+    size_t size;
+    size_t used;
+    size_t chars;
+};
+
+// Control characters carry no visible name, so they are skipped instead of
+// aborting the read. Returns false once the name is long enough to be cut.
+bool addChar(NameBuffer& buf, uint32_t code) {
+    if (code < 0x20 || code == 0x7F)
+        return true;
+    if (buf.chars == kMaxNameLen || buf.used + 4 + sizeof(kEllipsis) > buf.size)
+        return false;
+    buf.used += encodeUtf8(code, buf.out + buf.used);
+    buf.chars++;
+    return true;
+}
+
+// Returns true when the name was cut before the last UTF-16 unit.
+bool readUtf16(const unsigned char* s, size_t len, bool little, NameBuffer& buf) {
+    for (size_t i = 0; i + 1 < len; i += 2) {
+        uint32_t unit = little ? (s[i] | (s[i + 1] << 8)) : ((s[i] << 8) | s[i + 1]);
+        uint32_t code = unit;
+        if (unit >= 0xD800 && unit <= 0xDBFF) {
+            uint32_t low = 0;
+            if (i + 3 < len) {
+                const unsigned char* next = s + i + 2;
+                low = little ? (next[0] | (next[1] << 8)) : ((next[0] << 8) | next[1]);
+            }
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                code = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00);
+                i += 2;
+            } else {
+                code = 0xFFFD;
+            }
+        } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
+            code = 0xFFFD;
+        }
+        if (!addChar(buf, code))
+            return true;
+    }
+    return false;
+}
+
+// Returns true when the name was cut before the last character. Invalid UTF-8
+// is read byte by byte as Latin-1, which keeps a Windows-1252 name readable.
+bool readBytes(const char* s, size_t len, NameBuffer& buf) {
+    for (size_t i = 0; i < len;) {
+        size_t seq = utf8Length(s + i, len - i);
+        uint32_t code = seq ? readCodePoint(s + i, seq) : static_cast<unsigned char>(s[i]);
+        i += seq ? seq : 1;
+        if (!addChar(buf, code))
+            return true;
+    }
+    return false;
 }
 
 // Read at toast time instead of caching: the file is small, the toast is shown
@@ -190,36 +285,24 @@ bool readName(char* out, size_t size) {
         return false;
     }
 
-    size_t used = 0;
-    size_t chars = 0;
+    NameBuffer buf = {out, size, 0, 0};
+    const auto* bytes = reinterpret_cast<const unsigned char*>(raw + begin);
+    size_t len = end - begin;
     bool cut = false;
-    for (size_t i = begin; i < end;) {
-        size_t seq = utf8Length(raw + i, end - i);
-        if (!seq) {
-            LOGE("User name is not valid UTF-8: %s", path);
-            return false;
-        }
-        unsigned char byte = static_cast<unsigned char>(raw[i]);
-        if (seq == 1 && (byte < 0x20 || byte == 0x7F)) {
-            LOGE("User name has a control character: %s", path);
-            return false;
-        }
-        if (chars == kMaxNameLen || used + seq + sizeof(kEllipsis) > size) {
-            cut = true;
-            break;
-        }
-        memcpy(out + used, raw + i, seq);
-        used += seq;
-        chars++;
-        i += seq;
-    }
+    if (len >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        cut = readUtf16(bytes + 2, len - 2, true, buf);
+    else if (len >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+        cut = readUtf16(bytes + 2, len - 2, false, buf);
+    else
+        cut = readBytes(raw + begin, len, buf);
+
     if (cut) {
         size_t dots = sizeof(kEllipsis) - 1;
-        memcpy(out + used, kEllipsis, dots);
-        used += dots;
+        memcpy(buf.out + buf.used, kEllipsis, dots);
+        buf.used += dots;
     }
-    out[used] = '\0';
-    LOGI("User name loaded: %s", out);
+    buf.out[buf.used] = '\0';
+    LOGI("User name loaded: %s", buf.out);
     return true;
 }
 
