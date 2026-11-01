@@ -33,6 +33,14 @@ Target targets[T_COUNT] = {
     {"_Tile", "Key__To__Id", 1, nullptr, nullptr, nullptr},
     {"Converter__Tile__Type", "Term__Eat__Tile__Change", 1, nullptr, nullptr, nullptr},
     {"Converter__Tile__Type", "Eat__Tile__Change__Add", 1, nullptr, nullptr, nullptr},
+    {"Player__Manager", "Hh__Change", 1, nullptr, nullptr, nullptr},
+    {"Player__State__Sp__Tile__Kneel", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr, nullptr},
+    {"Player__State__Sp__Tile__Sit__F", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr,
+     nullptr},
+    {"Player__State__Sp__Tile__Sit__S", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr,
+     nullptr},
+    {"Player__State__Std__Action__Hh__Food", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr,
+     nullptr},
 };
 
 } // namespace

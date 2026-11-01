@@ -24,6 +24,11 @@ enum TargetId {
     T_TILE_KEY,
     T_EAT_CHANGE_TERM,
     T_EAT_CHANGE_ADD,
+    T_HH_CHANGE,
+    T_EAT_END_KNEEL,
+    T_EAT_END_SIT_F,
+    T_EAT_END_SIT_S,
+    T_EAT_END_FOOD,
     T_COUNT,
 };
 

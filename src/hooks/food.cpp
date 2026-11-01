@@ -155,13 +155,58 @@ int32_t addHook(void* self, int32_t id, void* method) {
     return orig ? orig(self, id, method) : id;
 }
 
+// Gingerbread leaves the hand only from Gingerbread_Man__Eat__End, which asks
+// Player__Manager.Hh__Change for the empty hand id. Each player posture has its
+// own copy of that method, so each raises the flag that turns the request into
+// a no-op and the cake stays in hand for the next bite.
+thread_local bool keepingGingerbread = false;
+
+void runEatEnd(TargetId id, void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(id).orig);
+    if (!orig)
+        return;
+    keepingGingerbread = true;
+    orig(self, method);
+    keepingGingerbread = false;
+}
+
+void kneelEndHook(void* self, void* method) { runEatEnd(T_EAT_END_KNEEL, self, method); }
+void sitFrontEndHook(void* self, void* method) { runEatEnd(T_EAT_END_SIT_F, self, method); }
+void sitSideEndHook(void* self, void* method) { runEatEnd(T_EAT_END_SIT_S, self, method); }
+void standEndHook(void* self, void* method) { runEatEnd(T_EAT_END_FOOD, self, method); }
+
+// Hh__Change writes the new held id into the player model and rebuilds the hand
+// sprite. Skipping it only while an eat end runs keeps pick up, drop and place
+// untouched.
+void hhChangeHook(void* self, int32_t id, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_HH_CHANGE).orig);
+    if (!orig)
+        return;
+    if (keepingGingerbread) {
+        LOGI("Gingerbread: kept in hand, eat end asked for id=%d", id);
+        return;
+    }
+    orig(self, id, method);
+}
+
 } // namespace
 
 void installFoodHooks() {
+    installHook(target(T_HH_CHANGE), reinterpret_cast<void*>(hhChangeHook),
+                "Player__Manager.Hh__Change");
+    installHook(target(T_EAT_END_KNEEL), reinterpret_cast<void*>(kneelEndHook),
+                "Player__State__Sp__Tile__Kneel.Gingerbread_Man__Eat__End");
+    installHook(target(T_EAT_END_SIT_F), reinterpret_cast<void*>(sitFrontEndHook),
+                "Player__State__Sp__Tile__Sit__F.Gingerbread_Man__Eat__End");
+    installHook(target(T_EAT_END_SIT_S), reinterpret_cast<void*>(sitSideEndHook),
+                "Player__State__Sp__Tile__Sit__S.Gingerbread_Man__Eat__End");
+    installHook(target(T_EAT_END_FOOD), reinterpret_cast<void*>(standEndHook),
+                "Player__State__Std__Action__Hh__Food.Gingerbread_Man__Eat__End");
+
     tileClass = classOf("_Tile");
     if (!tileClass || !resolveField(tileClass, "tiles", tilesField) ||
         !resolveField(fieldElementClass(tilesField), "key", keyField)) {
-        LOGE("Tile table not found; unlimited gingerbread disabled");
+        LOGE("Tile table not found; tile eat hooks disabled");
         return;
     }
     resolveField(tileClass, "id", idField);
