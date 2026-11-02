@@ -65,6 +65,7 @@ void* worker(void*) {
     installWeaponHooks();
     installEffectHooks();
     installSkinHooks();
+    installSlotHooks();
     loginToast();
     return nullptr;
 }

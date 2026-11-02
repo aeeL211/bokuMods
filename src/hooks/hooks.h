@@ -15,3 +15,4 @@ void installPrivacyHooks();
 void installAccountHooks();
 void installWeaponHooks();
 void installEffectHooks();
+void installSlotHooks();

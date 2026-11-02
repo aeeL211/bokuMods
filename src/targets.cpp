@@ -72,6 +72,7 @@ Target targets[T_COUNT] = {
     {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__Action__Update", 0, nullptr,
      nullptr, nullptr},
     {"Net__Account__Verify__Detail", "Refresh", 0, nullptr, nullptr, nullptr},
+    {"Global", "Data__Load__Data_Slot_Num_", 3, nullptr, nullptr, nullptr},
 };
 
 } // namespace

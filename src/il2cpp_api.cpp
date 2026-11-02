@@ -37,6 +37,7 @@ ClassSlot classes[] = {
     {"Title__Cmn", nullptr},
     {"UI__Menu__Net__Multi__Help", nullptr},
     {"_Tile", nullptr},
+    {"Global", nullptr},
     {"Net__Multi__Transfer__Pipe", nullptr},
     {"Net__Multi__Guest__Chat", nullptr},
     {"Guest__Manager", nullptr},

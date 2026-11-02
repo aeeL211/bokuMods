@@ -58,6 +58,7 @@ enum TargetId {
     T_GUN_UPDATE,
     T_ROCK_UPDATE,
     T_VERIFY_REFRESH,
+    T_SLOT_LOAD,
     T_COUNT,
 };
 

@@ -99,6 +99,7 @@ add_library(febrian SHARED
   src/hooks/weapon.cpp
   src/hooks/effects.cpp
   src/hooks/skin.cpp
+  src/hooks/slots.cpp
 )
 
 target_include_directories(febrian PRIVATE src)
