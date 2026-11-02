@@ -176,9 +176,8 @@ bool legacyDir(char* out, size_t size) {
 }
 
 // A previous session can leave a file this process may not append to (other
-// owner or read-only mode). The permission is repaired once, and a file that is
-// still not writable is left alone: dropping it would erase the old session,
-// while the caller can continue in a second name.
+// owner or read-only mode). The permission is repaired once here; the caller
+// then takes the file over or continues in a second name.
 int openPath(const char* path, int* err) {
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd >= 0)
@@ -193,6 +192,53 @@ int openPath(const char* path, int* err) {
         return fd;
     *err = errno;
     return -1;
+}
+
+bool isFile(const char* path) {
+    struct stat st = {};
+    return lstat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+// A file this process may read but not write still holds the earlier sessions.
+// Its bytes are moved into a fresh file at the same path, so the log keeps one
+// name and every line instead of starting a numbered sibling. The old file is
+// renamed first, so a copy that fails leaves the content next to the new file.
+int takeOverFile(const char* path, int* err) {
+    char old[600];
+    snprintf(old, sizeof(old), "%s.old", path);
+    if (rename(path, old) != 0) {
+        *err = errno;
+        return -1;
+    }
+    int src = open(old, O_RDONLY | O_CLOEXEC);
+    if (src < 0) {
+        *err = errno;
+        rename(old, path);
+        return -1;
+    }
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
+    if (fd < 0) {
+        *err = errno;
+        close(src);
+        rename(old, path);
+        return -1;
+    }
+
+    bool copied = true;
+    char buffer[4096];
+    ssize_t n;
+    while ((n = read(src, buffer, sizeof(buffer))) > 0) {
+        if (write(fd, buffer, static_cast<size_t>(n)) != n) {
+            copied = false;
+            break;
+        }
+    }
+    if (n < 0)
+        copied = false;
+    close(src);
+    if (copied)
+        unlink(old);
+    return fd;
 }
 
 bool ensureOpen() {
@@ -343,6 +389,14 @@ void logOpenFile() {
 
     int err = 0;
     int fd = openPath(path, &err);
+    bool takenOver = false;
+    // The file exists and is readable, but this process may not write it: take
+    // it over so the sessions continue at the same path instead of a numbered
+    // sibling that leaves the old lines behind.
+    if (fd < 0 && (err == EACCES || err == EPERM) && isFile(path)) {
+        fd = takeOverFile(path, &err);
+        takenOver = fd >= 0;
+    }
     char used[512];
     snprintf(used, sizeof(used), "%s", path);
     // The directory is ours, so a second name still gives this run a log. The
@@ -354,6 +408,9 @@ void logOpenFile() {
     if (fd < 0)
         return;
     logFd = fd;
+
+    struct stat st = {};
+    long long kept = fstat(fd, &st) == 0 ? static_cast<long long>(st.st_size) : 0;
 
     char clock[16];
     char date[16];
@@ -367,6 +424,21 @@ void logOpenFile() {
                  fromActivity ? "" : ", package fallback");
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
+    if (kept > 0)
+        n = snprintf(line, sizeof(line), "[%s] INFO  Log kept: %lld bytes from earlier runs\n",
+                     clock, kept);
+    else
+        n = snprintf(line, sizeof(line), "[%s] INFO  Log kept: new file\n", clock);
+    if (n > 0)
+        write(fd, line, static_cast<size_t>(n));
+    if (takenOver) {
+        n = snprintf(line, sizeof(line),
+                     "[%s] ERROR Log takeover: %s not writable (%d %s), old content moved into "
+                     "a new file\n",
+                     clock, path, err, strerror(err));
+        if (n > 0)
+            write(fd, line, static_cast<size_t>(n));
+    }
     if (strcmp(used, path) != 0) {
         n = snprintf(line, sizeof(line), "[%s] ERROR Log file: %s unusable (%d %s), using %s\n",
                      clock, path, err, strerror(err), used);

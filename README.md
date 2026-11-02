@@ -74,6 +74,7 @@ Log hanya ditulis ke file, tidak ke logcat, di
 ```
 [15:14:12] INFO  Log start (2026-11-01)
 [15:14:12] INFO  Log file: /storage/emulated/0/Android/data/com.pixticle.bokuboku/files/bokumods.log (append)
+[15:14:12] INFO  Log kept: 48120 bytes from earlier runs
 [15:14:12] INFO  Library loaded
 [15:14:13] INFO  ShadowHook initialized
 [15:14:15] INFO  Scan done: found 29 of 29 methods
@@ -83,9 +84,12 @@ Log hanya ditulis ke file, tidak ke logcat, di
 ```
 
 File lama tidak dihapus: file dibuka dengan mode append, jadi tiap sesi menambah baris di
-bawahnya dan diawali baris `Log start`. Kalau file lama tidak bisa ditambah, mod mencoba
-memperbaiki permission, lalu memakai `bokumods-2.log` sampai `bokumods-9.log` sebagai nama
-cadangan dan mencatat alasannya. File lama tetap utuh dengan semua barisnya.
+bawahnya dan diawali baris `Log start`. Baris `Log kept` menunjukkan berapa byte dari sesi
+sebelumnya yang sudah ada di file itu sebelum sesi ini menulis, jadi kelanjutannya bisa dicek
+langsung. Kalau file lama tidak bisa ditambah, mod mencoba memperbaiki permission; bila tetap
+gagal, isi file lama disalin ke file baru di path yang sama supaya semua baris tetap terbaca.
+Nama `bokumods-2.log` sampai `bokumods-9.log` hanya dipakai kalau file utama tidak bisa diambil
+alih, dan alasannya dicatat di log. File lama tidak pernah dihapus.
 Baris yang muncul sebelum folder log siap disimpan dulu di memori lalu ditulis saat
 file berhasil dibuka, jadi baris awal tidak hilang.
 
