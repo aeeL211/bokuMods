@@ -1,8 +1,11 @@
 #include "jni_bridge.h"
 
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <cstdio>
+#include <cstring>
 
 namespace {
 
@@ -91,4 +94,27 @@ bool externalStorageRoot(char* out, size_t size) {
     if (detach)
         findJavaVm()->DetachCurrentThread();
     return ok;
+}
+
+bool appPackage(char* out, size_t size) {
+    int fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    char buffer[192];
+    ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    close(fd);
+    if (n <= 0)
+        return false;
+    buffer[n] = '\0';
+
+    // A secondary process appends ":name" to the package, so only the part
+    // before the colon belongs to the app dir.
+    char* colon = strchr(buffer, ':');
+    if (colon)
+        *colon = '\0';
+    size_t len = strlen(buffer);
+    if (len == 0 || len >= size)
+        return false;
+    memcpy(out, buffer, len + 1);
+    return true;
 }

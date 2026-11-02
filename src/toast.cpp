@@ -15,14 +15,9 @@
 
 namespace {
 
-// The login name is published by the mod manager app, not by the game, so it
-// lives under that app's external files dir. getExternalFilesDir is tied to the
-// calling package, so the path is built from the shared storage root instead.
-constexpr char kNamePath[] = "Android/data/com.pixticle.bokuboku.mods/files/Setting/User_Name.txt";
-
 // The toast is one short line; a longer name is cut at a character boundary and
 // marked with an ellipsis so the message stays readable.
-constexpr size_t kMaxNameLen = 20;
+constexpr size_t kMaxNameLen = 64;
 constexpr char kEllipsis[] = "...";
 
 // Toast.show() needs a Looper on the calling thread: the toast view is driven
@@ -81,7 +76,7 @@ bool hasLooper(JNIEnv* env) {
 }
 
 void* toastThread(void* arg) {
-    char text[160];
+    char text[384];
     snprintf(text, sizeof(text), "%s", static_cast<const char*>(arg));
     free(arg);
 
@@ -243,16 +238,30 @@ bool readBytes(const char* s, size_t len, NameBuffer& buf) {
     return false;
 }
 
-// Read at toast time instead of caching: the file is small, the toast is shown
-// once per session, and an edited name is picked up on the next launch.
-bool readName(char* out, size_t size) {
+// The login name is published by the mod manager app, not by the game, so it
+// lives under that app's external files dir. The game's own package is read at
+// runtime, which keeps the path free of a hardcoded package name.
+bool userNamePath(char* out, size_t size) {
     char root[512];
     if (!externalStorageRoot(root, sizeof(root))) {
         LOGE("User name root unavailable");
         return false;
     }
+    char package[192];
+    if (!appPackage(package, sizeof(package))) {
+        LOGE("User name package unavailable");
+        return false;
+    }
+    snprintf(out, size, "%s/Android/data/%s.mods/files/Setting/User_Name.txt", root, package);
+    return true;
+}
+
+// Read at toast time instead of caching: the file is small, the toast is shown
+// once per session, and an edited name is picked up on the next launch.
+bool readName(char* out, size_t size) {
     char path[768];
-    snprintf(path, sizeof(path), "%s/%s", root, kNamePath);
+    if (!userNamePath(path, sizeof(path)))
+        return false;
 
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
@@ -333,12 +342,12 @@ void toast(const char* text) {
 // The activation toast names the account from the mod manager's file; a broken
 // or missing file falls back to a plain login message instead of failing.
 void loginToast() {
-    char name[128];
+    char name[320];
     if (!readName(name, sizeof(name))) {
         toast("MODS: Logged in");
         return;
     }
-    char text[192];
+    char text[384];
     snprintf(text, sizeof(text), "MODS: Logged in as %s", name);
     toast(text);
 }
