@@ -92,7 +92,6 @@ add_library(febrian SHARED
   src/hooks/skin_range.cpp
   src/hooks/about.cpp
   src/hooks/food.cpp
-  src/hooks/host.cpp
   src/hooks/privacy.cpp
   src/hooks/skin.cpp
 )
