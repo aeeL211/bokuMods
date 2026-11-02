@@ -1,39 +1,40 @@
 #include "hooks.h"
 
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-#include <cerrno>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 
 #include "hook.h"
 #include "il2cpp_api.h"
-#include "jni_bridge.h"
 #include "log.h"
 #include "targets.h"
 
 namespace {
 
-// Portraits are small: a name and four integer lists. The cap only protects the
-// hook from a corrupt length, not a real limit the game enforces.
-constexpr int32_t kMaxPortraitChars = 4096;
-constexpr size_t kMaxPortraitBytes = kMaxPortraitChars * 4;
-constexpr int kMaxSkinFiles = 500;
+// A model string is a few hundred separated fields. The cap only stops a
+// corrupt length from walking past the string.
+constexpr int32_t kMaxModelChars = 16384;
+constexpr size_t kMaxModelBytes = static_cast<size_t>(kMaxModelChars) * 3 + 1;
+// One entry per distinct skin a session can show; a repeat costs one compare.
+constexpr int kMaxHashes = 512;
+constexpr int kMaxSlot = 1000;
+constexpr size_t kMaxPathBytes = 1024;
 
-// One buffer for the converted string and one for the folder scan, so the hook
-// does not put 16 KB on the game thread stack on every portrait refresh.
-char skinText[kMaxPortraitBytes];
-char skinOther[kMaxPortraitBytes];
+char modelText[kMaxModelBytes];
+char pathText[kMaxPathBytes];
+char fileText[kMaxModelBytes];
 
-// A skin already on disk keeps its number across sessions, so the folder is
-// read once and the hashes of its files are kept instead of re-reading them.
-uint64_t skinHashes[kMaxSkinFiles];
-int skinCount = 0;
-int skinNext = 0;
-bool skinCacheReady = false;
+uint64_t modelHashes[kMaxHashes];
+int modelHashCount = 0;
+int nextSlot = 1;
+bool slotReady = false;
+
+Field guestA = {};
+Field managerData = {};
+Field dataManagerModel = {};
+bool fieldsReady = false;
 
 size_t putCodePoint(uint32_t code, char* out) {
     if (code < 0x80) {
@@ -58,10 +59,12 @@ size_t putCodePoint(uint32_t code, char* out) {
     return 4;
 }
 
-bool portraitText(void* str, char* out, size_t size) {
+// Both the model string and the file path arrive as UTF-16, so one converter
+// serves the hash, the log line and the open() call.
+bool toUtf8(void* str, char* out, size_t size) {
     int32_t len = stringLength(str);
     const uint16_t* chars = stringChars(str);
-    if (len <= 0 || len > kMaxPortraitChars || !chars)
+    if (len <= 0 || !chars)
         return false;
 
     size_t used = 0;
@@ -81,23 +84,10 @@ bool portraitText(void* str, char* out, size_t size) {
         used += putCodePoint(code, out + used);
     }
     out[used] = '\0';
-    return used > 0;
-}
-
-// The skin folder sits next to the log, in the game's own external files dir.
-// That dir belongs to this process, so no storage permission is involved.
-bool skinDir(char* out, size_t size) {
-    char root[512];
-    if (!externalStorageRoot(root, sizeof(root)))
-        return false;
-    char package[192];
-    if (!appPackage(package, sizeof(package)))
-        return false;
-    snprintf(out, size, "%s/Android/data/%s/files/Skin", root, package);
     return true;
 }
 
-uint64_t textHash(const char* text, size_t len) {
+uint64_t hashText(const char* text, size_t len) {
     uint64_t hash = 1469598103934665603ull;
     for (size_t i = 0; i < len; i++) {
         hash ^= static_cast<uint8_t>(text[i]);
@@ -106,103 +96,130 @@ uint64_t textHash(const char* text, size_t len) {
     return hash;
 }
 
-bool knownSkin(uint64_t hash) {
-    for (int i = 0; i < skinCount; i++) {
-        if (skinHashes[i] == hash)
+bool seenHash(uint64_t hash) {
+    for (int i = 0; i < modelHashCount; i++) {
+        if (modelHashes[i] == hash)
             return true;
     }
     return false;
 }
 
-// The first number with no file is the next slot to fill, so a gap left by a
-// deleted skin is reused instead of skipped.
-int freeSlot(const char* dir, int from) {
-    char path[1024];
-    for (int i = from; i <= kMaxSkinFiles; i++) {
-        snprintf(path, sizeof(path), "%s/skin_%d.txt", dir, i);
-        if (access(path, F_OK) != 0)
-            return i;
-    }
-    return 0;
+void rememberHash(uint64_t hash) {
+    if (modelHashCount < kMaxHashes)
+        modelHashes[modelHashCount++] = hash;
 }
 
-void loadSkinDir(const char* dir) {
-    char path[1024];
-    for (int i = 1; i <= kMaxSkinFiles; i++) {
-        snprintf(path, sizeof(path), "%s/skin_%d.txt", dir, i);
-        int fd = open(path, O_RDONLY | O_CLOEXEC);
-        if (fd < 0)
-            continue;
-        ssize_t n = read(fd, skinOther, sizeof(skinOther) - 1);
-        close(fd);
-        if (n > 0 && skinCount < kMaxSkinFiles)
-            skinHashes[skinCount++] = textHash(skinOther, static_cast<size_t>(n));
-    }
-    skinNext = freeSlot(dir, 1);
+// The model folder belongs to the same Manager that holds the guest list, so
+// the game's own writer lands the file in Save/Model without any path guess.
+void* dataModel(void* guestManager) {
+    if (!fieldsReady)
+        return nullptr;
+    void* manager = readPtr(guestManager, guestA);
+    void* data = readPtr(manager, managerData);
+    return readPtr(data, dataManagerModel);
 }
 
-void writeSkin(const char* dir, uint64_t hash) {
-    if (!skinNext) {
-        LOGE("Skin folder full: %s", dir);
-        return;
-    }
+// The game's own path for a model slot, so the layout is never guessed here.
+bool slotPath(void* model, int slot) {
+    auto fn = reinterpret_cast<void* (*)(void*, int32_t, void*)>(target(T_DATA_MODEL_PATH).addr);
+    return fn && toUtf8(fn(model, slot, target(T_DATA_MODEL_PATH).method), pathText,
+                        sizeof(pathText));
+}
 
-    char path[1024];
-    size_t len = strlen(skinText);
-    snprintf(path, sizeof(path), "%s/skin_%d.txt", dir, skinNext);
-    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
-    if (fd < 0) {
-        LOGE("Skin write failed: %s (%d %s)", path, errno, strerror(errno));
-        skinNext = freeSlot(dir, skinNext + 1);
-        return;
-    }
+bool slotExists(void* model, int slot) {
+    return slotPath(model, slot) && access(pathText, F_OK) == 0;
+}
 
-    ssize_t n = write(fd, skinText, len);
+void writeSlot(void* model, int slot, void* text) {
+    auto fn =
+        reinterpret_cast<void (*)(void*, int32_t, void*, void*)>(target(T_DATA_MODEL_WRITE).addr);
+    if (fn)
+        fn(model, slot, text, target(T_DATA_MODEL_WRITE).method);
+}
+
+// A skin from an earlier session already owns its slot, so the hash of every
+// Data.txt on disk is loaded once and the next write continues after them.
+bool readSlot(void* model, int slot) {
+    if (!slotPath(model, slot))
+        return false;
+    int fd = open(pathText, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    ssize_t n = read(fd, fileText, sizeof(fileText) - 1);
     close(fd);
-    if (n != static_cast<ssize_t>(len)) {
-        LOGE("Skin write incomplete: %s", path);
-        return;
-    }
-    if (skinCount < kMaxSkinFiles)
-        skinHashes[skinCount++] = hash;
-    LOGI("Skin saved: skin_%d.txt (%zu bytes)", skinNext, len);
-    skinNext = freeSlot(dir, skinNext + 1);
+    if (n > 0)
+        rememberHash(hashText(fileText, static_cast<size_t>(n)));
+    return true;
 }
 
-// A skin already on disk keeps its number, so a second look at the same player
-// writes nothing. A new one takes the first free number.
-void savePortrait(void* str) {
-    if (!portraitText(str, skinText, sizeof(skinText)))
-        return;
-    uint64_t hash = textHash(skinText, strlen(skinText));
-
-    char dir[768];
-    if (!skinDir(dir, sizeof(dir)))
-        return;
-    mkdir(dir, 0777);
-    if (!skinCacheReady) {
-        skinCacheReady = true;
-        loadSkinDir(dir);
-    }
-    if (knownSkin(hash))
-        return;
-    writeSkin(dir, hash);
+void seedSlots(void* model) {
+    int slot = 1;
+    while (slot <= kMaxSlot && readSlot(model, slot))
+        slot++;
+    nextSlot = slot;
+    LOGI("Skin slots: %d saved, next %d", modelHashCount, nextSlot);
 }
 
-// Every portrait the game renders is parsed here, whether it came from the
-// account database or from a guest in the room, so this is the one place that
-// sees every skin the player looks at. The parser returns a managed object, so
-// the hook hands back the same pointer instead of copying its fields.
-void* parseHook(void* d, void* method) {
-    savePortrait(d);
+// Every guest arrives with the string the game itself stores in Data.txt, so
+// one copy per distinct skin goes into the first free model slot.
+void saveModel(void* guestManager, void* modelStr) {
+    if (!fieldsReady || !modelStr)
+        return;
+    void* model = dataModel(guestManager);
+    if (!model)
+        return;
+    if (!toUtf8(modelStr, modelText, sizeof(modelText)))
+        return;
 
-    auto orig = reinterpret_cast<void* (*)(void*, void*)>(target(T_PORTRAIT_PARSE).orig);
-    return orig ? orig(d, method) : nullptr;
+    if (!slotReady) {
+        slotReady = true;
+        seedSlots(model);
+    }
+    uint64_t hash = hashText(modelText, strlen(modelText));
+    if (seenHash(hash))
+        return;
+    if (nextSlot > kMaxSlot) {
+        LOGE("Skin slots full, %d skins kept", modelHashCount);
+        return;
+    }
+
+    writeSlot(model, nextSlot, modelStr);
+    if (!slotExists(model, nextSlot)) {
+        LOGE("Skin write failed: slot %d", nextSlot);
+        return;
+    }
+    rememberHash(hash);
+    LOGI("Skin saved: slot %d (%zu bytes)", nextSlot, strlen(modelText));
+    nextSlot++;
+}
+
+using AddFn = void (*)(void*, void*, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, void*,
+                       void*, void*, void*, void*, bool, bool, bool, bool, bool, bool, void*);
+
+// The guest list is built from this one call on both host and client, and its
+// Model argument is the full skin string, so nothing has to be parsed here.
+void addHook(void* self, void* user, int32_t z, int32_t x, int32_t y, int32_t dir, int32_t s,
+             int32_t obj, void* key, void* dollName, void* parent, void* model, void* ping,
+             bool build, bool detonate, bool saveWorld, bool dollInteract, bool dollMove,
+             bool dollSetting, void* method) {
+    saveModel(self, model);
+
+    auto orig = reinterpret_cast<AddFn>(target(T_GUEST_ADD).orig);
+    if (orig)
+        orig(self, user, z, x, y, dir, s, obj, key, dollName, parent, model, ping, build, detonate,
+             saveWorld, dollInteract, dollMove, dollSetting, method);
 }
 
 } // namespace
 
 void installSkinHooks() {
-    installHook(target(T_PORTRAIT_PARSE), reinterpret_cast<void*>(parseHook),
-                "_Portrait.Str__To__Portrait");
+    void* guestClass = classOf("Guest__Manager");
+    fieldsReady = resolveField(guestClass, "a", guestA);
+    void* managerClass = fieldsReady ? fieldClass(guestA) : nullptr;
+    fieldsReady = fieldsReady && resolveField(managerClass, "data", managerData);
+    void* dataClass = fieldsReady ? fieldClass(managerData) : nullptr;
+    fieldsReady = fieldsReady && resolveField(dataClass, "model", dataManagerModel);
+    LOGI("Skin model fields %s", fieldsReady ? "OK" : "missing, skins stay untouched");
+
+    installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook), "Guest__Manager.Add");
 }
