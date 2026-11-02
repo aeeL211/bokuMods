@@ -8,3 +8,6 @@ void installPasswordHooks();
 void installSkinRangeHooks();
 void installAboutHooks();
 void installFoodHooks();
+void installHostHooks();
+void installSkinHooks();
+void installPrivacyHooks();

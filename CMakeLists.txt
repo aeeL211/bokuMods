@@ -9,14 +9,12 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# --- ABI guard ---------------------------------------------------------------
 if(NOT DEFINED ANDROID_ABI OR NOT ANDROID_ABI MATCHES "^arm64-v8a$")
   message(FATAL_ERROR
     "Unsupported or missing ANDROID_ABI='${ANDROID_ABI}'. "
     "Use the NDK toolchain file with arm64-v8a.")
 endif()
 
-# --- ShadowHook (sources fetched by CI, linked statically) -------------------
 # Upstream's own CMakeLists builds a shared library and a companion stub, which
 # a one-file delivery cannot ship, so only the sources are reused here. sh_jni.c
 # is excluded because it defines a second JNI_OnLoad and that symbol must stay
@@ -72,7 +70,6 @@ target_compile_options(shadowhook PRIVATE
 )
 set_target_properties(shadowhook PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# --- Project -----------------------------------------------------------------
 # File logging is on by default; -DBOKU_LOG=OFF drops it for the smallest .so.
 option(BOKU_LOG "Enable file logging" ON)
 
@@ -95,6 +92,9 @@ add_library(febrian SHARED
   src/hooks/skin_range.cpp
   src/hooks/about.cpp
   src/hooks/food.cpp
+  src/hooks/host.cpp
+  src/hooks/privacy.cpp
+  src/hooks/skin.cpp
 )
 
 target_include_directories(febrian PRIVATE src)

@@ -6,15 +6,15 @@
 
 namespace {
 
-// Build and destroy stay as the host set them; only save-world is forced, so a
-// guest can save the world without the host granting that permission.
+// The host sends the starting permission set, and a guest cannot ask for more
+// later, so all three flags are forced before the game stores them.
 void permissionStartHook(void* self, bool build, bool destroy, bool, void* method) {
     LOGI("Permission: start game build=%d destroy=%d", build, destroy);
     auto orig =
         reinterpret_cast<void (*)(void*, bool, bool, bool, void*)>(target(T_PERMISSION_START).orig);
     if (!orig)
         return;
-    orig(self, build, destroy, true, method);
+    orig(self, true, true, true, method);
 }
 
 void permissionSaveHook(void* self, bool, void* method) {

@@ -58,6 +58,9 @@ void* worker(void*) {
     installSkinRangeHooks();
     installAboutHooks();
     installFoodHooks();
+    installHostHooks();
+    installPrivacyHooks();
+    installSkinHooks();
     loginToast();
     return nullptr;
 }

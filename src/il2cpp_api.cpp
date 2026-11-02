@@ -35,6 +35,7 @@ ClassSlot classes[] = {
     {"Title__Cmn", nullptr},
     {"UI__Menu__Net__Multi__Help", nullptr},
     {"_Tile", nullptr},
+    {"Net__Multi__Transfer__Pipe", nullptr},
 };
 
 // On arm64 the array header is klass, monitor and bounds (pointers) plus
