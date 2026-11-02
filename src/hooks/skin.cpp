@@ -122,8 +122,8 @@ void* dataModel(void* guestManager) {
 // The game's own path for a model slot, so the layout is never guessed here.
 bool slotPath(void* model, int slot) {
     auto fn = reinterpret_cast<void* (*)(void*, int32_t, void*)>(target(T_DATA_MODEL_PATH).addr);
-    return fn && toUtf8(fn(model, slot, target(T_DATA_MODEL_PATH).method), pathText,
-                        sizeof(pathText));
+    return fn &&
+           toUtf8(fn(model, slot, target(T_DATA_MODEL_PATH).method), pathText, sizeof(pathText));
 }
 
 bool slotExists(void* model, int slot) {
