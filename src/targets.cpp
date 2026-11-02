@@ -55,6 +55,7 @@ Target targets[T_COUNT] = {
      nullptr},
     {"UI__Menu__Net__Multi__Join__Room_List", "Term__Room__Data__Get__World_Size_", 2, nullptr,
      nullptr, nullptr},
+    {"UI__Menu__World__New__Setting__Size", "_Start", 0, nullptr, nullptr, nullptr},
     {"Guest__Manager", "Add", 18, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Write__Data", 2, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Path__Data", 1, nullptr, nullptr, nullptr},

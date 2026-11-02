@@ -42,6 +42,7 @@ enum TargetId {
     T_KICK_SEND,
     T_EXPLOSION_SEND,
     T_ROOM_SIZE,
+    T_WORLD_CAP,
     T_GUEST_ADD,
     T_DATA_MODEL_WRITE,
     T_DATA_MODEL_PATH,
