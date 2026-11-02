@@ -42,6 +42,7 @@ ClassSlot classes[] = {
     {"Net__Multi__Guest__Chat", nullptr},
     {"Guest__Manager", nullptr},
     {"UI__Menu__World__New__Setting__Size", nullptr},
+    {"Player__State", nullptr},
     {"Player__State__Cmn", nullptr},
     {"Player__State__Std__Action__Hh__Weapon", nullptr},
     {"Camera__Manager", nullptr},

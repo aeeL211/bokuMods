@@ -73,6 +73,15 @@ Target targets[T_COUNT] = {
      nullptr, nullptr},
     {"Net__Account__Verify__Detail", "Refresh", 0, nullptr, nullptr, nullptr},
     {"Global", "Data__Load__Data_Slot_Num_", 3, nullptr, nullptr, nullptr},
+    {"Player__State", "_Update", 0, nullptr, nullptr, nullptr},
+    {"Player__State__Cmn", "Term__Gun_Shoot__Action__Update__End", 1, nullptr, nullptr, nullptr},
+    {"Player__State__Cmn", "Term__Rockman__Rock_Buster__Action__Update__End", 0, nullptr,
+     nullptr, nullptr},
+    {"Player__State__Cmn", "Term__Rockman__Rock_Buster__End__To__Action", 0, nullptr, nullptr,
+     nullptr},
+    {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__Action", 1, nullptr,
+     nullptr, nullptr},
+    {"Player__State__Cmn", "Rockman__Rock_Buster__End__Dir", 0, nullptr, nullptr, nullptr},
 };
 
 } // namespace

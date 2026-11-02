@@ -27,8 +27,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   tetap hanya tampil di jendela pribadi, tidak dobel.
 - **World baru terlalu sempit** — batas slider ukuran world dinaikkan ke preset terbesar game
   (600x300), jadi world baru bisa dibuat lebih luas dari batas perangkat ini.
-- **Pistol dan blaster lambat** — tembakan berulang otomatis selama tombol interaksi ditahan,
-  tanpa perlu menekannya lagi tiap kali.
+- **Pistol dan blaster lambat** — selama tombol interaksi ditahan, tembakan berulang sendiri
+  dengan jeda tetap yang lebih pendek, baik saat berdiri maupun saat berjalan, tanpa perlu
+  menekannya lagi tiap kali.
 - **Amunisi blaster lemah** — blaster selalu memakai amunisi terkuat.
 - **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail

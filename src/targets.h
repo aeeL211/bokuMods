@@ -59,6 +59,12 @@ enum TargetId {
     T_ROCK_UPDATE,
     T_VERIFY_REFRESH,
     T_SLOT_LOAD,
+    T_STATE_UPDATE,
+    T_GUN_ACTION_END,
+    T_ROCK_ACTION_END,
+    T_ROCK_END_TO_ACTION,
+    T_ROCK_ACTION,
+    T_ROCK_END_DIR,
     T_COUNT,
 };
 
