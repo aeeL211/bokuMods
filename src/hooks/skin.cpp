@@ -34,7 +34,9 @@ bool slotReady = false;
 Field guestA = {};
 Field managerData = {};
 Field dataManagerModel = {};
+Field modelFilename = {};
 bool fieldsReady = false;
+bool notReadyLogged = false;
 
 size_t putCodePoint(uint32_t code, char* out) {
     if (code < 0x80) {
@@ -111,12 +113,15 @@ void rememberHash(uint64_t hash) {
 
 // The model folder belongs to the same Manager that holds the guest list, so
 // the game's own writer lands the file in Save/Model without any path guess.
+// Its file names live in a holder that a half-built store does not have yet,
+// and the path builder dereferences it, so that store is reported as absent.
 void* dataModel(void* guestManager) {
     if (!fieldsReady)
         return nullptr;
     void* manager = readPtr(guestManager, guestA);
     void* data = readPtr(manager, managerData);
-    return readPtr(data, dataManagerModel);
+    void* model = readPtr(data, dataManagerModel);
+    return readPtr(model, modelFilename) ? model : nullptr;
 }
 
 // The game's own path for a model slot, so the layout is never guessed here.
@@ -166,8 +171,13 @@ void saveModel(void* guestManager, void* modelStr) {
     if (!fieldsReady || !modelStr)
         return;
     void* model = dataModel(guestManager);
-    if (!model)
+    if (!model) {
+        if (fieldsReady && !notReadyLogged) {
+            notReadyLogged = true;
+            LOGE("Skin model not ready, skins from this point are skipped");
+        }
         return;
+    }
     if (!toUtf8(modelStr, modelText, sizeof(modelText)))
         return;
 
@@ -219,6 +229,8 @@ void installSkinHooks() {
     fieldsReady = fieldsReady && resolveField(managerClass, "data", managerData);
     void* dataClass = fieldsReady ? fieldClass(managerData) : nullptr;
     fieldsReady = fieldsReady && resolveField(dataClass, "model", dataManagerModel);
+    void* modelClass = fieldsReady ? fieldClass(dataManagerModel) : nullptr;
+    fieldsReady = fieldsReady && resolveField(modelClass, "_filename", modelFilename);
     LOGI("Skin model fields %s", fieldsReady ? "OK" : "missing, skins stay untouched");
 
     installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook), "Guest__Manager.Add");
