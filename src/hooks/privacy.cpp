@@ -17,6 +17,8 @@ bool rowHook(void*, int, void*) { return true; }
 
 Field userSelectField = {};
 Field uidField = {};
+Field emailField = {};
+Field verifyAccountField = {};
 
 // The email row formats whatever the fetched profile carried. A profile never
 // carries the email of another account, so an unblocked row would print
@@ -37,9 +39,39 @@ void emailHook(void* self, void* objs, void* labels, void* text, void* method) {
     orig(self, objs, labels, shown, method);
 }
 
+// The verify detail fills its email row straight from the selected user, not
+// through the formatter above. The account id is written for the duration of
+// the refresh, then the original value is put back.
+void verifyRefreshHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_VERIFY_REFRESH).orig);
+    if (!orig)
+        return;
+
+    void* account = readPtr(self, verifyAccountField);
+    void* user = readPtr(account, userSelectField);
+    void* saved = readPtr(user, emailField);
+    bool replaced = false;
+    if (user && stringLength(saved) == 0) {
+        void* uid = readPtr(user, uidField);
+        if (uid && stringLength(uid) > 0) {
+            setRef(user, emailField, uid);
+            replaced = true;
+        }
+    }
+
+    orig(self, method);
+
+    if (replaced)
+        setRef(user, emailField, saved);
+}
+
 bool resolvePrivacyFields() {
-    return resolveField(classOf("Net__Account__Manager"), "user_Select", userSelectField) &&
-           resolveField(fieldClass(userSelectField), "uid", uidField);
+    void* manager = classOf("Net__Account__Manager");
+    void* verifyDetail = classOf("Net__Account__Verify__Detail");
+    return resolveField(manager, "user_Select", userSelectField) &&
+           resolveField(fieldClass(userSelectField), "uid", uidField) &&
+           resolveField(fieldClass(userSelectField), "email", emailField) &&
+           resolveField(verifyDetail, "account", verifyAccountField);
 }
 
 } // namespace
@@ -64,4 +96,6 @@ void installPrivacyHooks() {
     installHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(rowHook),
                 "Verify.Term__Privacy__Visible__Email");
     installHook(target(T_ACCOUNT_EMAIL), reinterpret_cast<void*>(emailHook), "Manager.Email");
+    installHook(target(T_VERIFY_REFRESH), reinterpret_cast<void*>(verifyRefreshHook),
+                "Verify__Detail.Refresh");
 }

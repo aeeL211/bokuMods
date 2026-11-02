@@ -22,6 +22,12 @@ constexpr size_t kMaxLogBytes = 160;
 Field managerField = {};
 Field chatField = {};
 Field playerField = {};
+Field guestsField = {};
+Field guestItemsField = {};
+Field guestSizeField = {};
+Field guestKeyField = {};
+Field guestAccountField = {};
+Field userNameField = {};
 bool chatReady = false;
 
 // A payload can carry control bytes, which would split a log line in two, so
@@ -51,24 +57,74 @@ void logPrivate(void* user, void* receiver, void* text) {
          utf8Of(text, bodyText, sizeof(bodyText)));
 }
 
+bool sameText(void* a, void* b) {
+    if (!a || !b)
+        return false;
+
+    int32_t len = stringLength(a);
+    if (len != stringLength(b))
+        return false;
+    const uint16_t* aChars = stringChars(a);
+    const uint16_t* bChars = stringChars(b);
+    if (!aChars || !bChars)
+        return false;
+    for (int32_t i = 0; i < len; i++) {
+        if (aChars[i] != bChars[i])
+            return false;
+    }
+    return true;
+}
+
+// A private message carries the receiver's key, not the display name. The
+// guest list is keyed the same way, so the name is looked up there.
+void* receiverName(void* self, void* receiver) {
+    void* manager = readPtr(self, managerField);
+    void* guests = readPtr(manager, guestsField);
+    void* items = readPtr(guests, guestItemsField);
+    if (!items)
+        return nullptr;
+
+    int32_t count = readInt(guests, guestSizeField);
+    int32_t capacity = arrayLength(items);
+    if (count > capacity)
+        count = capacity;
+
+    char* data = arrayData(items);
+    for (int32_t i = 0; i < count; i++) {
+        void* guest = *reinterpret_cast<void**>(data + i * sizeof(void*));
+        if (!guest || !sameText(readPtr(guest, guestKeyField), receiver))
+            continue;
+
+        void* account = readPtr(guest, guestAccountField);
+        void* name = readPtr(account, userNameField);
+        if (name && stringLength(name) > 0)
+            return name;
+    }
+    return nullptr;
+}
+
 // The room chat already labels the sender, so only the receiver goes in front
 // of the body. The prefix is ASCII and the rest stays UTF-16.
-void* privateLine(void* receiver, void* text) {
-    const uint16_t* name = stringChars(receiver);
+void* privateLine(void* name, void* text) {
     const uint16_t* body = stringChars(text);
-    int32_t nameLen = stringLength(receiver);
     int32_t bodyLen = stringLength(text);
-    if (!name || !body || nameLen <= 0 || bodyLen <= 0)
+    if (!body || bodyLen <= 0)
         return nullptr;
+
+    const uint16_t* nameChars = name ? stringChars(name) : nullptr;
+    int32_t nameLen = nameChars ? stringLength(name) : 0;
+    bool named = nameLen > 0;
 
     uint16_t line[kMaxLineChars];
     size_t used = 0;
-    for (const char* p = "[PM -> "; *p && used < kMaxLineChars; p++)
+    for (const char* p = named ? "[PM -> " : "[PM] "; *p && used < kMaxLineChars; p++)
         line[used++] = static_cast<uint16_t>(*p);
-    for (int32_t i = 0; i < nameLen && used < kMaxLineChars; i++)
-        line[used++] = name[i];
-    for (const char* p = "] "; *p && used < kMaxLineChars; p++)
-        line[used++] = static_cast<uint16_t>(*p);
+    for (int32_t i = 0; named && i < nameLen && used < kMaxLineChars; i++)
+        line[used++] = nameChars[i];
+    if (named) {
+        for (const char* p = "] "; *p && used < kMaxLineChars; p++)
+            line[used++] = static_cast<uint16_t>(*p);
+    }
     for (int32_t i = 0; i < bodyLen && used < kMaxLineChars; i++)
         line[used++] = body[i];
     return newUtf16String(line, static_cast<int32_t>(used));
@@ -83,21 +139,6 @@ void* localName(void* self) {
     if (!player || !key)
         return nullptr;
     return key(player, target(T_PLAYER_KEY).method);
-}
-
-bool sameText(void* a, void* b) {
-    int32_t len = stringLength(a);
-    if (len != stringLength(b))
-        return false;
-    const uint16_t* aChars = stringChars(a);
-    const uint16_t* bChars = stringChars(b);
-    if (!aChars || !bChars)
-        return false;
-    for (int32_t i = 0; i < len; i++) {
-        if (aChars[i] != bChars[i])
-            return false;
-    }
-    return true;
 }
 
 // A private message is broadcast to every client and only the receiver check
@@ -120,9 +161,18 @@ void receiveHook(void* self, void* receiver, void* user, void* text, void* metho
         return;
 
     void* chat = readPtr(self, chatField);
-    void* line = privateLine(receiver, text);
+    void* line = privateLine(receiverName(self, receiver), text);
     if (chat && line)
         roomChat(chat, user, line, target(T_CHAT_MSG_RECEIVE).method);
+}
+
+bool resolveGuestFields() {
+    return resolveField(fieldClass(managerField), "guests", guestsField) &&
+           resolveField(fieldClass(guestsField), "_items", guestItemsField) &&
+           resolveField(fieldClass(guestsField), "_size", guestSizeField) &&
+           resolveField(fieldElementClass(guestItemsField), "key", guestKeyField) &&
+           resolveField(fieldElementClass(guestItemsField), "account", guestAccountField) &&
+           resolveField(fieldClass(guestAccountField), "user_Name", userNameField);
 }
 
 } // namespace
@@ -133,6 +183,7 @@ void installChatHooks() {
     bool ownReady = resolveField(chatClass, "a", managerField) &&
                     resolveField(fieldClass(managerField), "player", playerField) &&
                     target(T_PLAYER_KEY).addr;
+    bool guestReady = resolveGuestFields();
 
     if (chatReady && ownReady)
         LOGI("Chat fields OK");
@@ -140,6 +191,9 @@ void installChatHooks() {
         LOGE("Chat field not found; private messages stay in the log");
     else
         LOGE("Own name not found; messages to this player appear twice");
+
+    if (!guestReady)
+        LOGE("Guest names not found; private messages show no receiver name");
 
     installHook(target(T_GUEST_MSG_RECEIVE), reinterpret_cast<void*>(receiveHook),
                 "Guest__Chat.Msg__Receive__Text");

@@ -9,99 +9,92 @@
 
 namespace {
 
-// Just under the configured interval, so the next update crosses it.
-constexpr float kIntervalEpsilon = 0.0001f;
-
-// The blaster's configured full charge step. The id lookup picks the charged
-// projectile only when the charge counter equals this value.
-constexpr int32_t kFullChargeStep = 3;
-
-Field cmnManagerField = {};
 Field weaponManagerField = {};
+Field cmnManagerField = {};
+Field cmnHhField = {};
 Field stateField = {};
-Field stateTimerField = {};
-Field rockField = {};
-Field intervalField = {};
-Field intervalTimerField = {};
-Field chargeField = {};
-// The charge counter lives in the field the dump calls "active", but the game
-// reads, increments and compares it as a 32-bit step count.
-Field stepField = {};
 Field comboField = {};
-Field weaponHhField = {};
+Field rockField = {};
+Field chargeField = {};
+// The runtime charge counter is the 32-bit step count the blaster id lookup
+// compares with the configured full step.
+Field stepField = {};
+Field inputField = {};
+Field inputManagerField = {};
+Field actionField = {};
+Field keepField = {};
 Field hhRockField = {};
-Field shootField = {};
-Field shootTimeField = {};
-Field shootEndField = {};
-Field shootIntervalField = {};
+Field configChargeField = {};
+Field fullStepField = {};
 
 void* playerState(void* self, const Field& managerField) {
     void* manager = readPtr(self, managerField);
     return readPtr(manager, stateField);
 }
 
+// The action and end update repeat the shot only while the state's combo flag
+// is set. The flag follows the interaction button, so holding it down fires
+// again every time the stock timing allows.
+void syncCombo(void* self, const Field& managerField) {
+    void* manager = readPtr(self, managerField);
+    void* input = readPtr(manager, inputField);
+    void* inputManager = readPtr(input, inputManagerField);
+    void* action = readPtr(inputManager, actionField);
+    void* state = readPtr(manager, stateField);
+    if (state && action)
+        writeBool(state, comboField, readBool(action, keepField));
+}
+
 // The gun end state is a fixed timer. Ending it on the first update removes the
 // pause between shots; the action phase still plays the muzzle and bullet.
 bool gunEndHook(void*, void*) { return true; }
 
-// The blaster action waits on its own animation before it reaches the end
-// state. Ending it right away lets the next shot start without that tail.
-bool blasterActionEndHook(void*, void*) { return true; }
+void gunUpdateHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_GUN_UPDATE).orig);
+    if (!orig)
+        return;
 
-// The end state normally waits out the shot interval. Answering with the held
-// combo flag starts the next shot at once while the button stays down. This is
-// the path used by every stance except the weapon one below.
-bool blasterEndToActionHook(void* self, void* method) {
-    void* state = playerState(self, cmnManagerField);
-    if (state && comboField.field)
-        return readInt(state, comboField) != 0;
-
-    // Without the state fields the stock interval is the only safe answer.
-    auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_END_TO_ACTION).orig);
-    return orig && orig(self, method);
+    syncCombo(self, weaponManagerField);
+    orig(self, method);
 }
 
-// The weapon class runs its own end update instead of End__To__Action. With the
-// button held, the interval timer is moved just under its configured duration so
-// the stock update starts the next shot on this frame. With the button released,
-// the state timer is moved the same way, so the end tail is skipped at once.
+void blasterUpdateHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_UPDATE).orig);
+    if (!orig)
+        return;
+
+    syncCombo(self, weaponManagerField);
+    orig(self, method);
+}
+
+// The blaster end state waits out the shot interval before it starts the next
+// action. With the combo flag set from the held button, the stock update starts
+// the next shot on its own as soon as the interval elapses.
 void blasterEndUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_END_UPDATE).orig);
     if (!orig)
         return;
 
-    void* state = playerState(self, weaponManagerField);
-    void* hh = readPtr(self, weaponHhField);
-    void* config = readPtr(hh, hhRockField);
-    void* shoot = readPtr(config, shootField);
-    void* time = readPtr(shoot, shootTimeField);
-    if (state && time) {
-        if (readInt(state, comboField) != 0) {
-            void* rock = readPtr(state, rockField);
-            void* interval = readPtr(rock, intervalField);
-            if (interval)
-                writeFloat(interval, intervalTimerField,
-                           readFloat(time, shootIntervalField) - kIntervalEpsilon);
-        } else {
-            writeFloat(state, stateTimerField, readFloat(time, shootEndField) - kIntervalEpsilon);
-        }
-    }
-
+    syncCombo(self, weaponManagerField);
     orig(self, method);
 }
 
-// The blaster picks its projectile from the charge step. Forcing the full step
-// before the lookup makes every shot use the strongest ammo.
+// The id lookup returns the charged projectile only when the runtime charge
+// step equals the configured full step. Writing that step before the lookup
+// makes every shot use the strongest ammo.
 int32_t blasterIdHook(void* self, void* method) {
     auto orig = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_ID).orig);
     if (!orig)
         return 0;
 
     void* state = playerState(self, cmnManagerField);
-    void* blaster = readPtr(state, rockField);
-    void* charge = readPtr(blaster, chargeField);
-    if (charge)
-        writeInt(charge, stepField, kFullChargeStep);
+    void* rock = readPtr(state, rockField);
+    void* charge = readPtr(rock, chargeField);
+    void* hh = readPtr(self, cmnHhField);
+    void* config = readPtr(hh, hhRockField);
+    void* configCharge = readPtr(config, configChargeField);
+    if (charge && configCharge)
+        writeInt(charge, stepField, readInt(configCharge, fullStepField));
 
     return orig(self, method);
 }
@@ -109,41 +102,37 @@ int32_t blasterIdHook(void* self, void* method) {
 bool resolveWeaponFields() {
     void* cmn = classOf("Player__State__Cmn");
     void* weapon = classOf("Player__State__Std__Action__Hh__Weapon");
-    if (!resolveField(cmn, "m", cmnManagerField) ||
-        !resolveField(weapon, "m", weaponManagerField) ||
-        !resolveField(weapon, "chr_Hh", weaponHhField) ||
-        !resolveField(fieldClass(weaponManagerField), "__state", stateField) ||
-        !resolveField(fieldClass(stateField), "timer", stateTimerField) ||
-        !resolveField(fieldClass(stateField), "combo", comboField) ||
-        !resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) ||
-        !resolveField(fieldClass(rockField), "interval", intervalField) ||
-        !resolveField(fieldClass(intervalField), "timer", intervalTimerField) ||
-        !resolveField(fieldClass(rockField), "charge", chargeField) ||
-        !resolveField(fieldClass(chargeField), "active", stepField) ||
-        !resolveField(fieldClass(weaponHhField), "_rockman__Rock_Buster", hhRockField) ||
-        !resolveField(fieldClass(hhRockField), "shoot", shootField) ||
-        !resolveField(fieldClass(shootField), "_time", shootTimeField) ||
-        !resolveField(fieldClass(shootTimeField), "end", shootEndField) ||
-        !resolveField(fieldClass(shootTimeField), "interval", shootIntervalField))
-        return false;
-    return true;
+    return resolveField(weapon, "m", weaponManagerField) &&
+           resolveField(cmn, "m", cmnManagerField) && resolveField(cmn, "chr_Hh", cmnHhField) &&
+           resolveField(fieldClass(weaponManagerField), "__state", stateField) &&
+           resolveField(fieldClass(stateField), "combo", comboField) &&
+           resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) &&
+           resolveField(fieldClass(rockField), "charge", chargeField) &&
+           resolveField(fieldClass(chargeField), "step", stepField) &&
+           resolveField(fieldClass(weaponManagerField), "input", inputField) &&
+           resolveField(fieldClass(inputField), "input", inputManagerField) &&
+           resolveField(fieldClass(inputManagerField), "action", actionField) &&
+           resolveField(fieldClass(actionField), "keep", keepField) &&
+           resolveField(fieldClass(cmnHhField), "_rockman__Rock_Buster", hhRockField) &&
+           resolveField(fieldClass(hhRockField), "charge", configChargeField) &&
+           resolveField(fieldClass(configChargeField), "step__Full", fullStepField);
 }
 
 } // namespace
 
 void installWeaponHooks() {
-    if (resolveWeaponFields()) {
-        LOGI("Weapon fields OK");
-    } else {
-        LOGE("Weapon fields not found; blaster stays stock");
+    if (!resolveWeaponFields()) {
+        LOGE("Weapon fields not found; weapons stay stock");
+        return;
     }
+    LOGI("Weapon fields OK");
 
     installHook(target(T_GUN_END), reinterpret_cast<void*>(gunEndHook),
                 "Cmn.Term__Gun_Shoot__End__Update__End");
-    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(blasterActionEndHook),
-                "Cmn.Term__Rockman__Rock_Buster__Action__Update__End");
-    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(blasterEndToActionHook),
-                "Cmn.Term__Rockman__Rock_Buster__End__To__Action");
+    installHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(gunUpdateHook),
+                "Weapon.Gun_Shoot__Action__Update");
+    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(blasterUpdateHook),
+                "Weapon.Rockman__Rock_Buster__Action__Update");
     installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(blasterEndUpdateHook),
                 "Weapon.Rockman__Rock_Buster__End__Update");
     installHook(target(T_ROCK_ID), reinterpret_cast<void*>(blasterIdHook),

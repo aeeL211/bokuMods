@@ -9,8 +9,6 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Konten terkunci** — semua tile, model, dan melody langsung terbuka.
 - **Nama profil terpotong** — batas input nama dinaikkan.
 - **Tanggal lahir dibatasi** — hari, bulan, dan tahun tidak lagi dipotong.
-- **Tanggal registrasi aneh** — tanggal akun selalu tampil 11 Februari 2112.
-- **Email ditolak** — format email bebas diterima.
 - **Teks perkenalan terpotong** — batas panjang perkenalan dinaikkan.
 - **Host tidak mengizinkan save world** — save tetap bisa dilakukan.
 - **Room ber-password** — bisa dimasuki tanpa mengetik password.
@@ -26,7 +24,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   tetap hanya tampil di jendela pribadi, tidak dobel.
 - **World baru terlalu sempit** — batas slider ukuran world dinaikkan ke preset terbesar game
   (600x300), jadi world baru bisa dibuat lebih luas dari batas perangkat ini.
-- **Pistol dan blaster lambat** — jeda tembak dihilangkan, tombol bisa ditekan berulang.
+- **Pistol dan blaster lambat** — tembakan berulang otomatis selama tombol interaksi ditahan,
+  tanpa perlu menekannya lagi tiap kali.
 - **Amunisi blaster lemah** — blaster selalu memakai amunisi terkuat.
 - **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
@@ -60,10 +59,6 @@ Kalau dua sesi terbuka pada detik yang sama, file kedua diberi akhiran `-2`.
   diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai.
 - Kemampuan host seperti kick, izin pemain, dan pengaturan room diperiksa di sisi server, jadi
   tidak dimodifikasi dan tetap mengikuti aturan room.
-- Tanggal registrasi yang ditampilkan hanya berubah di aplikasi; data akun di server tidak ikut
-  berubah.
-- Pemeriksaan format email hanya ada di aplikasi. Server tetap bisa menolak alamat yang tidak
-  valid saat akun dibuat atau diubah.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.

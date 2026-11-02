@@ -53,6 +53,8 @@ int32_t readInt(void* obj, const Field& f);
 void writeInt(void* obj, const Field& f, int32_t value);
 float readFloat(void* obj, const Field& f);
 void writeFloat(void* obj, const Field& f, float value);
+bool readBool(void* obj, const Field& f);
+void writeBool(void* obj, const Field& f, bool value);
 void setRef(void* obj, const Field& f, void* value);
 
 int32_t arrayLength(void* arr);

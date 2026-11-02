@@ -28,6 +28,7 @@ ClassSlot classes[] = {
     {"UI__Manager", nullptr},
     {"Net__Account__Manager", nullptr},
     {"Net__Account__My_Account__Detail", nullptr},
+    {"Net__Account__Verify__Detail", nullptr},
     {"UI__Menu__Option__Profile", nullptr},
     {"MyBehaviour", nullptr},
     {"UI__Menu__Model__Main__Pos", nullptr},
@@ -121,6 +122,18 @@ void writeFloat(void* obj, const Field& f, float value) {
     if (!obj || !f.field)
         return;
     *reinterpret_cast<float*>(reinterpret_cast<char*>(obj) + f.offset) = value;
+}
+
+bool readBool(void* obj, const Field& f) {
+    if (!obj || !f.field)
+        return false;
+    return *reinterpret_cast<unsigned char*>(reinterpret_cast<char*>(obj) + f.offset) != 0;
+}
+
+void writeBool(void* obj, const Field& f, bool value) {
+    if (!obj || !f.field)
+        return;
+    *reinterpret_cast<unsigned char*>(reinterpret_cast<char*>(obj) + f.offset) = value ? 1 : 0;
 }
 
 // il2cpp_field_set_value in this build stores the reference itself: its setter
