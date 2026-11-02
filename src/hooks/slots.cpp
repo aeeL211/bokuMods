@@ -24,22 +24,14 @@ struct Slot {
 };
 
 Slot slots[] = {
-    {"model", nullptr, {}, {}, {}},
-    {"face", nullptr, {}, {}, {}},
-    {"portrait", nullptr, {}, {}, {}},
-    {"photo", nullptr, {}, {}, {}},
-    {"_favorite", nullptr, {}, {}, {}},
-    {"_melody", nullptr, {}, {}, {}},
-    {"world", nullptr, {}, {}, {}},
-    {"doll", nullptr, {}, {}, {}},
-    {"toolbar", "face", {}, {}, {}},
-    {"toolbar", "hh", {}, {}, {}},
-    {"_paint", "painting", {}, {}, {}},
-    {"_paint", "palette", {}, {}, {}},
-    {"_block", "pack", {}, {}, {}},
-    {"_block", "own", {}, {}, {}},
-    {"_block", "list", {}, {}, {}},
-    {"_jukebox", "library", {}, {}, {}},
+    {"model", nullptr, {}, {}, {}},       {"face", nullptr, {}, {}, {}},
+    {"portrait", nullptr, {}, {}, {}},    {"photo", nullptr, {}, {}, {}},
+    {"_favorite", nullptr, {}, {}, {}},   {"_melody", nullptr, {}, {}, {}},
+    {"world", nullptr, {}, {}, {}},       {"doll", nullptr, {}, {}, {}},
+    {"toolbar", "face", {}, {}, {}},      {"toolbar", "hh", {}, {}, {}},
+    {"_paint", "painting", {}, {}, {}},   {"_paint", "palette", {}, {}, {}},
+    {"_block", "pack", {}, {}, {}},       {"_block", "own", {}, {}, {}},
+    {"_block", "list", {}, {}, {}},       {"_jukebox", "library", {}, {}, {}},
     {"_jukebox", "playlist", {}, {}, {}},
 };
 
