@@ -86,6 +86,7 @@ add_library(febrian SHARED
   # hook groups
   src/hooks/iap.cpp
   src/hooks/multiplayer.cpp
+  src/hooks/chat.cpp
   src/hooks/text_input.cpp
   src/hooks/profile.cpp
   src/hooks/password_room.cpp

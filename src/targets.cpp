@@ -69,6 +69,9 @@ Target targets[T_COUNT] = {
     {"Net__Account__Manager", "User_Detail__Content__Date", 4, nullptr, nullptr, nullptr},
     {"Net__Account__Manager", "Term__Email__Format", 1, nullptr, nullptr, nullptr},
     {"Net__Account__My_Account__Detail", "Introduce__Set", 1, nullptr, nullptr, nullptr},
+    {"Net__Multi__Guest__Chat", "Msg__Receive__Text", 3, nullptr, nullptr, nullptr},
+    {"Net__Multi__Chat", "Msg__Receive__Text", 2, nullptr, nullptr, nullptr},
+    {"Player__Manager", "Key", 0, nullptr, nullptr, nullptr},
 };
 
 } // namespace

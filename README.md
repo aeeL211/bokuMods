@@ -21,6 +21,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   di daftar model dan bisa dipakai.
 - **Room besar tidak muncul** — batas ukuran world milik perangkat ini diabaikan, jadi room
   berukuran besar tetap tampil di daftar dan bisa dimasuki.
+- **Pesan pribadi pemain lain tidak terbaca** — isi DM antar pemain di room ikut tampil di chat
+  room dengan awalan `[PM -> penerima]` dan dicatat di log. DM yang ditujukan ke akun sendiri
+  tetap hanya tampil di jendela pribadi, tidak dobel.
 - **World baru terlalu sempit** — batas slider ukuran world dinaikkan ke preset terbesar game
   (600x300), jadi world baru bisa dibuat lebih luas dari batas perangkat ini.
 - **Pistol dan blaster lambat** — jeda tembak dihilangkan, tombol bisa ditekan berulang.
@@ -60,5 +63,8 @@ log ikut hilang.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.
+- Isi pesan pribadi hanya versi teks; pesan suara pribadi tidak ditampilkan. Kalau pengirim
+  sudah keluar room saat pesan masuk, chat room menolak nama itu dan hanya log yang mencatat.
+  Setiap DM yang tampil juga bisa memicu bunyi notifikasi chat.
 - Gunakan di akun sendiri; mod ini bisa melanggar ketentuan layanan game.
 - Lisensi pihak ketiga ada di `THIRD_PARTY_NOTICES.md`.

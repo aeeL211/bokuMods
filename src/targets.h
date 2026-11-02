@@ -55,6 +55,9 @@ enum TargetId {
     T_REGISTER_DATE_YMD,
     T_EMAIL_FORMAT,
     T_INTRODUCE_SET,
+    T_GUEST_MSG_RECEIVE,
+    T_CHAT_MSG_RECEIVE,
+    T_PLAYER_KEY,
     T_COUNT,
 };
 

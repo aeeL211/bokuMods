@@ -2,6 +2,7 @@
 
 void installIapHooks();
 void installMultiplayerHooks();
+void installChatHooks();
 void installTextInputHooks();
 void installProfileHooks();
 void installPasswordHooks();
