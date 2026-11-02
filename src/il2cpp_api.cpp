@@ -114,14 +114,23 @@ void writeFloat(void* obj, const Field& f, float value) {
     *reinterpret_cast<float*>(reinterpret_cast<char*>(obj) + f.offset) = value;
 }
 
+// il2cpp_field_set_value in this build stores the reference itself: its setter
+// takes the object pointer and never reads through it. Passing a pointer to the
+// local variable put a stack address in the field, and the collector then freed
+// the string that the field was supposed to keep alive. The read-back covers a
+// build that instead expects a pointer to the value.
 void setRef(void* obj, const Field& f, void* value) {
     if (!obj || !f.field)
         return;
     if (api.fieldSetValue) {
+        api.fieldSetValue(obj, f.field, value);
+        if (readPtr(obj, f) == value)
+            return;
         api.fieldSetValue(obj, f.field, &value);
-    } else {
-        *reinterpret_cast<void**>(reinterpret_cast<char*>(obj) + f.offset) = value;
+        if (readPtr(obj, f) == value)
+            return;
     }
+    *reinterpret_cast<void**>(reinterpret_cast<char*>(obj) + f.offset) = value;
 }
 
 int32_t arrayLength(void* arr) {

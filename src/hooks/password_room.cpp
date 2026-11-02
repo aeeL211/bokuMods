@@ -47,8 +47,7 @@ bool buttonHook(void*, void*) { return true; }
 // closes the keyboard and calls Join__Start. The box stays empty, so the room's
 // own string object is put in place for that compare: String.Equals returns true
 // on the same reference before it reads a character, and the room data keeps the
-// object alive. A fresh copy cannot be used here, the collector frees it before
-// the compare and the gate then reads a recycled header.
+// object alive.
 void okHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_PASSWORD_OK).orig);
     if (!orig)
@@ -57,7 +56,13 @@ void okHook(void* self, void* method) {
     void* password = roomPassword(self);
     if (value && usableString(password)) {
         setRef(value, strField, password);
-        LOGI("Password: room password set, len=%d", stringLength(password));
+        // The compare reads this field after the original runs, so a write that
+        // did not land is the one failure the next log must make obvious.
+        void* stored = readPtr(value, strField);
+        if (stored == password)
+            LOGI("Password: room password set, len=%d", stringLength(password));
+        else
+            LOGE("Password: room password write lost, stored=%p want=%p", stored, password);
     } else {
         LOGE("Password: room password missing, compare runs as-is");
     }
