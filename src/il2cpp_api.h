@@ -60,6 +60,8 @@ char* arrayData(void* arr);
 int32_t stringLength(void* str);
 const uint16_t* stringChars(void* str);
 void* newUtf16String(const uint16_t* chars, int32_t len);
+// IL2CPP text is UTF-16, but log lines and file paths are UTF-8.
+bool toUtf8(void* str, char* out, size_t size);
 void* staticFieldData(void* klass);
 
 bool nearValue(float value, float target);

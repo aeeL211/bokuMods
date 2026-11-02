@@ -38,57 +38,6 @@ Field modelFilename = {};
 bool fieldsReady = false;
 bool notReadyLogged = false;
 
-size_t putCodePoint(uint32_t code, char* out) {
-    if (code < 0x80) {
-        out[0] = static_cast<char>(code);
-        return 1;
-    }
-    if (code < 0x800) {
-        out[0] = static_cast<char>(0xC0 | (code >> 6));
-        out[1] = static_cast<char>(0x80 | (code & 0x3F));
-        return 2;
-    }
-    if (code < 0x10000) {
-        out[0] = static_cast<char>(0xE0 | (code >> 12));
-        out[1] = static_cast<char>(0x80 | ((code >> 6) & 0x3F));
-        out[2] = static_cast<char>(0x80 | (code & 0x3F));
-        return 3;
-    }
-    out[0] = static_cast<char>(0xF0 | (code >> 18));
-    out[1] = static_cast<char>(0x80 | ((code >> 12) & 0x3F));
-    out[2] = static_cast<char>(0x80 | ((code >> 6) & 0x3F));
-    out[3] = static_cast<char>(0x80 | (code & 0x3F));
-    return 4;
-}
-
-// Both the model string and the file path arrive as UTF-16, so one converter
-// serves the hash, the log line and the open() call.
-bool toUtf8(void* str, char* out, size_t size) {
-    int32_t len = stringLength(str);
-    const uint16_t* chars = stringChars(str);
-    if (len <= 0 || !chars)
-        return false;
-
-    size_t used = 0;
-    for (int32_t i = 0; i < len; i++) {
-        uint32_t code = chars[i];
-        if (code >= 0xD800 && code <= 0xDBFF && i + 1 < len) {
-            uint32_t low = chars[i + 1];
-            if (low >= 0xDC00 && low <= 0xDFFF) {
-                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
-                i++;
-            }
-        }
-        if (code >= 0xD800 && code <= 0xDFFF)
-            code = 0xFFFD;
-        if (used + 4 >= size)
-            return false;
-        used += putCodePoint(code, out + used);
-    }
-    out[used] = '\0';
-    return true;
-}
-
 uint64_t hashText(const char* text, size_t len) {
     uint64_t hash = 1469598103934665603ull;
     for (size_t i = 0; i < len; i++) {
