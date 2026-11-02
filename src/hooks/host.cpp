@@ -21,16 +21,31 @@ thread_local void* forgedKey = nullptr;
 Field pipeMulti;
 bool pipeReady = false;
 
+// PhotonNetwork.InRoom is the game's own answer to "are we inside a room", so
+// the host powers are only borrowed while a room exists and the lobby keeps the
+// vanilla answers. That keeps the host panel, and its close-room button, out of
+// the menus, where the close request would look like a closed room.
+bool inRoom() {
+    auto fn = reinterpret_cast<bool (*)(void*)>(target(T_PHOTON_IN_ROOM).addr);
+    return fn && fn(target(T_PHOTON_IN_ROOM).method);
+}
+
 // The host panel, the player permission list and the room settings all return
 // early unless this is true, so forcing it opens the host controls in a room
 // owned by someone else. Those panel sends carry no sender check on the
 // receiver, so every client applies them once the panel can call them.
-bool hostStatusHook(void*, void*) { return true; }
+bool hostStatusHook(void* self, void* method) {
+    auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_HOST_STATUS).orig);
+    return (orig && orig(self, method)) || inRoom();
+}
 
 // The room's save-world action and the creator-only room actions ask this
 // instead of the host, so both answers have to agree or those controls stay
 // disabled in the panel.
-bool creatorHook(void*, void*) { return true; }
+bool creatorHook(void* self, void* method) {
+    auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_HOST_CREATOR).orig);
+    return (orig && orig(self, method)) || inRoom();
+}
 
 void* hostKey(void* multi) {
     auto key = reinterpret_cast<void* (*)(void*, void*)>(target(T_HOST_KEY).addr);

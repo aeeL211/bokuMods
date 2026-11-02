@@ -55,6 +55,7 @@ Target targets[T_COUNT] = {
     {"Guest__Manager", "Add", 18, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Write__Data", 2, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Path__Data", 1, nullptr, nullptr, nullptr},
+    {"PhotonNetwork", "get_InRoom", 0, nullptr, nullptr, nullptr},
     {"Net__Account__Manager", "Term__Privacy__Visible", 3, nullptr, nullptr, nullptr},
     {"Net__Account__Blacklist", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Add_Friend", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
