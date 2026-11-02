@@ -27,6 +27,7 @@ ClassSlot classes[] = {
     {"UIInput", nullptr},
     {"UI__Manager", nullptr},
     {"Net__Account__Manager", nullptr},
+    {"Net__Account__My_Account__Detail", nullptr},
     {"UI__Menu__Option__Profile", nullptr},
     {"MyBehaviour", nullptr},
     {"UI__Menu__Model__Main__Pos", nullptr},
@@ -38,6 +39,10 @@ ClassSlot classes[] = {
     {"Net__Multi__Transfer__Pipe", nullptr},
     {"Guest__Manager", nullptr},
     {"UI__Menu__World__New__Setting__Size", nullptr},
+    {"Player__State__Cmn", nullptr},
+    {"Player__State__Std__Action__Hh__Weapon", nullptr},
+    {"Camera__Manager", nullptr},
+    {"Eff__Type__Tile", nullptr},
 };
 
 // On arm64 the array header is klass, monitor and bounds (pointers) plus

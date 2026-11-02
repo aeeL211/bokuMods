@@ -11,11 +11,11 @@ namespace {
 // Day and month fields open with 2 characters, year with 4.
 int32_t birthdayLengthHook(void*, int32_t, void*) { return INT32_MAX; }
 
-// Birthday__Refresh_ only shows a day/year when V <= Limit. The month keeps its
-// 12 limit; day and year are opened up.
+// Birthday__Refresh_ only shows a value when V <= Limit. The stock month, day
+// and year caps are all lifted, so any number that was typed stays on screen.
 void birthdayHook(void* self, int32_t v, int32_t i, int32_t limit, void* def, void* method) {
     LOGI("Birthday: v=%d i=%d limit=%d", v, i, limit);
-    if (limit == 31 || limit == 9999)
+    if (limit == 12 || limit == 31 || limit == 9999)
         limit = INT32_MAX;
     auto orig = reinterpret_cast<void (*)(void*, int32_t, int32_t, int32_t, void*, void*)>(
         target(T_BIRTHDAY_REFRESH).orig);
@@ -41,14 +41,10 @@ void birthdayEndHook(void* self, void* text, void* method) {
 
 void dateCheckHook(int32_t* year, int32_t* month, int32_t* day, void* method) {
     if (birthdayEdit) {
-        // Keep values the rest of the game cannot index with, but leave the day
-        // alone otherwise: 31 February is the point of this bypass.
+        // Nothing is clamped here: an arbitrary day and month is the point of
+        // this bypass, and the labels are text, so no array is indexed by them.
         LOGI("Birthday: check skipped y=%d m=%d d=%d", year ? *year : -1, month ? *month : -1,
              day ? *day : -1);
-        if (month && (*month < 0 || *month > 12))
-            *month = 0;
-        if (day && (*day < 0 || *day > 31))
-            *day = 0;
         return;
     }
     auto orig =

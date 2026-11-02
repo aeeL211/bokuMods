@@ -30,7 +30,7 @@ int32_t skinWidened[kRangeSlots][kMaxAxes] = {};
 // Refresh__Step resets the X/Y sliders to -5..+5 and derives steps_Half,
 // steps_W and per_Step from steps_Max. Widen only the axes that are still at
 // -5..+5 (the rotate axis is left alone) and rebuild the derived values so
-// Value__To__Step sees the new range in the same Refresh() pass.
+// Value__To__Step sees the new -25..+25 range in the same Refresh() pass.
 void patchRange(void* self, const Field& ownerField, const Field& posField, int slot) {
     if (!ownerField.field || !posField.field || !posStepsMax.field || !posStepsHalf.field ||
         !posStepsW.field || !posW.field || !posValues.field || !valueMin.field || !valueMax.field ||
@@ -78,7 +78,7 @@ void patchRange(void* self, const Field& ownerField, const Field& posField, int 
             LOGE("Skin range: axis %d has steps_Max=%d, skipped", i, current);
             continue;
         }
-        if (current > INT32_MAX / 4) {
+        if (current > INT32_MAX / 5) {
             LOGE("Skin range: axis %d has steps_Max=%d, skipped", i, current);
             continue;
         }
@@ -93,7 +93,7 @@ void patchRange(void* self, const Field& ownerField, const Field& posField, int 
             widened = skinWidened[slot][i];
         } else {
             base = current;
-            widened = current * 4;
+            widened = current * 5;
             skinBase[slot][i] = base;
             skinWidened[slot][i] = widened;
             LOGI("Skin range: axis %d widened %d -> %d steps", i, base, widened);
@@ -108,8 +108,8 @@ void patchRange(void* self, const Field& ownerField, const Field& posField, int 
                 width / static_cast<float>(widened);
         }
 
-        writeFloat(value, valueMin, -20.0f);
-        writeFloat(value, valueMax, 20.0f);
+        writeFloat(value, valueMin, -25.0f);
+        writeFloat(value, valueMax, 25.0f);
         writeFloat(value, valuePerStep, 10.0f / static_cast<float>(base));
     }
 }

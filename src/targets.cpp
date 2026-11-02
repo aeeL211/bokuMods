@@ -53,6 +53,22 @@ Target targets[T_COUNT] = {
     {"Net__Account__Friend_Profile", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible__Email", 1, nullptr, nullptr, nullptr},
+    {"Player__State__Cmn", "Term__Gun_Shoot__End__Update__End", 0, nullptr, nullptr, nullptr},
+    {"Player__State__Cmn", "Term__Rockman__Rock_Buster__Action__Update__End", 0, nullptr, nullptr,
+     nullptr},
+    {"Player__State__Cmn", "Term__Rockman__Rock_Buster__End__To__Action", 0, nullptr, nullptr,
+     nullptr},
+    {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__End__Update", 0, nullptr,
+     nullptr, nullptr},
+    {"Player__State__Cmn", "Rockman__Rock_Buster__Id", 0, nullptr, nullptr, nullptr},
+    {"Camera__Manager", "Shake", 0, nullptr, nullptr, nullptr},
+    {"Camera__Manager", "Shake", 2, nullptr, nullptr, nullptr},
+    {"Eff__Type__Tile", "Debris", 1, nullptr, nullptr, nullptr},
+    {"Eff__Type__Tile", "Debris__Tile", 3, nullptr, nullptr, nullptr},
+    {"Net__Account__Manager", "User_Detail__Content__Date", 2, nullptr, nullptr, nullptr},
+    {"Net__Account__Manager", "User_Detail__Content__Date", 4, nullptr, nullptr, nullptr},
+    {"Net__Account__Manager", "Term__Email__Format", 1, nullptr, nullptr, nullptr},
+    {"Net__Account__My_Account__Detail", "Introduce__Set", 1, nullptr, nullptr, nullptr},
 };
 
 } // namespace

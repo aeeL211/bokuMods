@@ -10,3 +10,6 @@ void installAboutHooks();
 void installFoodHooks();
 void installSkinHooks();
 void installPrivacyHooks();
+void installAccountHooks();
+void installWeaponHooks();
+void installEffectHooks();

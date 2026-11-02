@@ -59,6 +59,9 @@ void* worker(void*) {
     installAboutHooks();
     installFoodHooks();
     installPrivacyHooks();
+    installAccountHooks();
+    installWeaponHooks();
+    installEffectHooks();
     installSkinHooks();
     loginToast();
     return nullptr;
