@@ -150,18 +150,7 @@ bool filesDir(char* out, size_t size) {
 // would hide the log outside the app sandbox.
 bool legacyDir(char* out, size_t size) {
     char package[192];
-    int fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
-        return false;
-    ssize_t n = read(fd, package, sizeof(package) - 1);
-    close(fd);
-    if (n <= 0)
-        return false;
-    package[n] = '\0';
-    char* colon = strchr(package, ':');
-    if (colon)
-        *colon = '\0';
-    if (!package[0])
+    if (!appPackage(package, sizeof(package)))
         return false;
 
     char root[512];
@@ -177,8 +166,8 @@ bool legacyDir(char* out, size_t size) {
 
 // A previous session can leave a file this process may not append to (other
 // owner or read-only mode). The permission is repaired once here; the caller
-// then takes the file over or continues in a second name.
-int openPath(const char* path, int* err) {
+// then replaces a file that still refuses the open.
+int openAppend(const char* path, int* err) {
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd >= 0)
         return fd;
@@ -194,51 +183,67 @@ int openPath(const char* path, int* err) {
     return -1;
 }
 
-bool isFile(const char* path) {
-    struct stat st = {};
-    return lstat(path, &st) == 0 && S_ISREG(st.st_mode);
+// Copies an older log into the open file. The source is unreadable when it
+// belongs to another app, which the caller reports instead of failing.
+bool copyInto(const char* from, int to) {
+    int src = open(from, O_RDONLY | O_CLOEXEC);
+    if (src < 0)
+        return false;
+    bool ok = true;
+    char buffer[4096];
+    ssize_t n;
+    while ((n = read(src, buffer, sizeof(buffer))) > 0) {
+        if (write(to, buffer, static_cast<size_t>(n)) != n) {
+            ok = false;
+            break;
+        }
+    }
+    if (n < 0)
+        ok = false;
+    close(src);
+    return ok;
 }
 
-// A file this process may read but not write still holds the earlier sessions.
-// Its bytes are moved into a fresh file at the same path, so the log keeps one
-// name and every line instead of starting a numbered sibling. The old file is
-// renamed first, so a copy that fails leaves the content next to the new file.
-int takeOverFile(const char* path, int* err) {
+// The log stays in one file, so a file that cannot be appended to is moved to
+// <path>.old and a fresh one takes the same path. Earlier bytes are copied back
+// when they can be read; otherwise the moved file keeps them.
+int replaceFile(const char* path, int* err, bool* copied) {
     char old[600];
     snprintf(old, sizeof(old), "%s.old", path);
+    // rename replaces an earlier regular .old file, so a second repair keeps
+    // one backup instead of piling up suffixes.
     if (rename(path, old) != 0) {
         *err = errno;
-        return -1;
-    }
-    int src = open(old, O_RDONLY | O_CLOEXEC);
-    if (src < 0) {
-        *err = errno;
-        rename(old, path);
         return -1;
     }
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd < 0) {
         *err = errno;
-        close(src);
         rename(old, path);
         return -1;
     }
-
-    bool copied = true;
-    char buffer[4096];
-    ssize_t n;
-    while ((n = read(src, buffer, sizeof(buffer))) > 0) {
-        if (write(fd, buffer, static_cast<size_t>(n)) != n) {
-            copied = false;
-            break;
-        }
-    }
-    if (n < 0)
-        copied = false;
-    close(src);
-    if (copied)
+    *copied = copyInto(old, fd);
+    if (*copied)
         unlink(old);
     return fd;
+}
+
+// A session killed in the middle of a line leaves no newline, so without this
+// the next Log start header would be glued to the last old bytes.
+bool endsWithNewline(const char* path, long long size) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return true;
+    char last = '\n';
+    ssize_t n = pread(fd, &last, 1, size - 1);
+    close(fd);
+    return n != 1 || last == '\n';
+}
+
+// Only an object that blocks the path is replaced. A full disk or an I/O error
+// leaves the old file exactly where it is, so no session is ever lost.
+bool replaceable(int err) {
+    return err == EACCES || err == EPERM || err == EISDIR || err == ENOTDIR || err == ELOOP;
 }
 
 bool ensureOpen() {
@@ -388,22 +393,17 @@ void logOpenFile() {
     }
 
     int err = 0;
-    int fd = openPath(path, &err);
-    bool takenOver = false;
-    // The file exists and is readable, but this process may not write it: take
-    // it over so the sessions continue at the same path instead of a numbered
-    // sibling that leaves the old lines behind.
-    if (fd < 0 && (err == EACCES || err == EPERM) && isFile(path)) {
-        fd = takeOverFile(path, &err);
-        takenOver = fd >= 0;
-    }
-    char used[512];
-    snprintf(used, sizeof(used), "%s", path);
-    // The directory is ours, so a second name still gives this run a log. The
-    // previous file stays in place with every line it already had.
-    for (int i = 2; fd < 0 && i <= 9; i++) {
-        snprintf(used, sizeof(used), "%s/bokumods-%d.log", dir, i);
-        fd = openPath(used, &err);
+    int fd = openAppend(path, &err);
+    bool replaced = false;
+    bool copied = false;
+    // A second name would leave the earlier lines behind, so a file that still
+    // refuses the open is replaced in place instead of starting bokumods-2.log.
+    if (fd < 0 && replaceable(err)) {
+        struct stat st = {};
+        if (lstat(path, &st) == 0) {
+            fd = replaceFile(path, &err, &copied);
+            replaced = fd >= 0;
+        }
     }
     if (fd < 0)
         return;
@@ -411,6 +411,8 @@ void logOpenFile() {
 
     struct stat st = {};
     long long kept = fstat(fd, &st) == 0 ? static_cast<long long>(st.st_size) : 0;
+    if (kept > 0 && !endsWithNewline(path, kept))
+        write(fd, "\n", 1);
 
     char clock[16];
     char date[16];
@@ -420,7 +422,7 @@ void logOpenFile() {
     int n = snprintf(line, sizeof(line), "[%s] INFO  Log start (%s)\n", clock, date);
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
-    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (append%s)\n", clock, used,
+    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (append%s)\n", clock, path,
                  fromActivity ? "" : ", package fallback");
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
@@ -431,17 +433,11 @@ void logOpenFile() {
         n = snprintf(line, sizeof(line), "[%s] INFO  Log kept: new file\n", clock);
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
-    if (takenOver) {
+    if (replaced) {
         n = snprintf(line, sizeof(line),
-                     "[%s] ERROR Log takeover: %s not writable (%d %s), old content moved into "
-                     "a new file\n",
-                     clock, path, err, strerror(err));
-        if (n > 0)
-            write(fd, line, static_cast<size_t>(n));
-    }
-    if (strcmp(used, path) != 0) {
-        n = snprintf(line, sizeof(line), "[%s] ERROR Log file: %s unusable (%d %s), using %s\n",
-                     clock, path, err, strerror(err), used);
+                     "[%s] ERROR Log replaced: %s could not be appended (%d %s), "
+                     "earlier bytes %s\n",
+                     clock, path, err, strerror(err), copied ? "copied in" : "moved to .old");
         if (n > 0)
             write(fd, line, static_cast<size_t>(n));
     }
@@ -461,6 +457,9 @@ void logPrint(char level, const char* fmt, ...) {
     int n = snprintf(line, sizeof(line), "[%s] %s %s\n", clock, levelName(level), msg);
     if (n <= 0)
         return;
+    // snprintf reports the untruncated length, so clamp before writing.
+    if (n >= static_cast<int>(sizeof(line)))
+        n = static_cast<int>(sizeof(line)) - 1;
     ensureOpen();
     writeLine(line, n);
 }
