@@ -14,9 +14,13 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Posisi skin sempit** — slider X/Y diperlebar ke -20..20.
 - **Gingerbread cepat habis** — kue tetap di tangan setelah 3 gigitan.
 - **Kemampuan host terkunci** — panel host terbuka juga di room orang lain, jadi kick, izin
-  pemain, build/destroy, save world, dan pengaturan room bisa dipakai.
-- **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disimpan otomatis ke file
-  bernomor.
+  pemain, build/destroy, save world, dan pengaturan room bisa dipakai. Di luar room panel itu
+  tetap tertutup, jadi tombol tutup room tidak lagi memunculkan dialog "Ruangan tertutup".
+- **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
+  kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
+  di daftar model dan bisa dipakai.
+- **Room besar tidak muncul** — batas ukuran world milik perangkat ini diabaikan, jadi room
+  berukuran besar tetap tampil di daftar dan bisa dimasuki.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
@@ -34,7 +38,12 @@ dan ditambahi tiap sesi, jadi riwayat tidak hilang.
 ## Catatan
 
 - Hanya `arm64-v8a`.
-- Skin tersimpan di `Android/data/com.pixticle.bokuboku/files/Skin/skin_1.txt` dan seterusnya,
-  berurutan dari nomor kosong pertama.
+- Skin tersimpan sebagai slot model game, yaitu
+  `Android/data/com.pixticle.bokuboku/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor
+  kosong pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.
+  Slot yang sudah ada dibaca sekali di awal, jadi skin yang sudah pernah tersimpan tidak
+  diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai.
+- Batas ukuran world hanya dilepas di daftar room dan panel masuk. Kalau perangkat benar-benar
+  kehabisan RAM saat memuat world raksasa, game tetap bisa menutup dirinya sendiri.
 - Gunakan di akun sendiri; mod ini bisa melanggar ketentuan layanan game.
 - Lisensi pihak ketiga ada di `THIRD_PARTY_NOTICES.md`.
