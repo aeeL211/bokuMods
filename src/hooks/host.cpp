@@ -47,6 +47,11 @@ bool creatorHook(void* self, void* method) {
     return (orig && orig(self, method)) || inRoom();
 }
 
+// The game marks a client that joined someone else's room as hacked, and every
+// host panel closes itself on that answer. A false keeps the panel open and
+// makes Term__Status__Admin true, which is what the admin controls ask instead.
+bool hackHook(void*, void*) { return false; }
+
 void* hostKey(void* multi) {
     auto key = reinterpret_cast<void* (*)(void*, void*)>(target(T_HOST_KEY).addr);
     if (!key || !multi)
@@ -143,6 +148,7 @@ void installHostHooks() {
                 "Multi.Term__Status__Host");
     installHook(target(T_HOST_CREATOR), reinterpret_cast<void*>(creatorHook),
                 "Multi.Term__Creator__Self");
+    installHook(target(T_HOST_HACK), reinterpret_cast<void*>(hackHook), "Multi.Term__Hack__Host");
     installHook(target(T_TILE_ADD_REQUEST), reinterpret_cast<void*>(addRequestHook),
                 "Transfer__Client.Tile__Add__Request");
     installHook(target(T_TILE_REMOVE_REQUEST), reinterpret_cast<void*>(removeRequestHook),

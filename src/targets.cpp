@@ -43,6 +43,7 @@ Target targets[T_COUNT] = {
      nullptr},
     {"Net__Multi", "Term__Status__Host", 0, nullptr, nullptr, nullptr},
     {"Net__Multi", "Term__Creator__Self", 0, nullptr, nullptr, nullptr},
+    {"Net__Multi", "Term__Hack__Host", 0, nullptr, nullptr, nullptr},
     {"Net__Multi", "Host__Key", 0, nullptr, nullptr, nullptr},
     {"Player__Manager", "Key", 0, nullptr, nullptr, nullptr},
     {"Net__Multi__Transfer__Client", "Tile__Add__Request", 7, nullptr, nullptr, nullptr},

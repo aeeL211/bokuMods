@@ -33,6 +33,7 @@ enum TargetId {
     T_EAT_END_FOOD,
     T_HOST_STATUS,
     T_HOST_CREATOR,
+    T_HOST_HACK,
     T_HOST_KEY,
     T_PLAYER_KEY,
     T_TILE_ADD_REQUEST,
