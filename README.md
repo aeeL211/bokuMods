@@ -33,8 +33,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Amunisi blaster lemah** — blaster selalu memakai amunisi terkuat.
 - **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
-  akun selalu terlihat. Email pemain lain tidak ikut diunduh game, jadi baris email menampilkan
-  ID akun sebagai gantinya, bukan kotak kosong.
+  akun selalu terlihat. Email pemain lain tidak ikut diunduh game, jadi baris email di daftar
+  teman, tambah teman, verifikasi, dan halaman profil menampilkan ID akun sebagai gantinya,
+  bukan kotak kosong.
 - **Kata kasar disensor** — semua pengecekan kata terlarang dilewati, jadi chat, nama, dan teks
   profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".

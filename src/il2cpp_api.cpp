@@ -29,6 +29,8 @@ ClassSlot classes[] = {
     {"Net__Account__Manager", nullptr},
     {"Net__Account__My_Account__Detail", nullptr},
     {"Net__Account__Verify__Detail", nullptr},
+    {"Net__Account__Friend_Profile", nullptr},
+    {"Net__Account__Add_Friend", nullptr},
     {"UI__Menu__Option__Profile", nullptr},
     {"MyBehaviour", nullptr},
     {"UI__Menu__Model__Main__Pos", nullptr},
