@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-# ASM is needed for the ShadowHook arm64 trampoline glue (arch/arm64/sh_glue.S).
+# ASM compiles the ShadowHook arm64 trampoline glue (arch/arm64/sh_glue.S).
 project(febrian C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -16,10 +16,11 @@ if(NOT DEFINED ANDROID_ABI OR NOT ANDROID_ABI MATCHES "^arm64-v8a$")
     "Use the NDK toolchain file with arm64-v8a.")
 endif()
 
-# --- ShadowHook (source fetched at build time, linked statically) ------------
-# Upstream's CMakeLists wants CMake 4 and produces a shared library plus a JNI
-# shim, so only the sources are reused here. sh_jni.c is left out: it defines a
-# second JNI_OnLoad, which must stay ours.
+# --- ShadowHook (sources fetched by CI, linked statically) -------------------
+# Upstream's own CMakeLists builds a shared library and a companion stub, which
+# a one-file delivery cannot ship, so only the sources are reused here. sh_jni.c
+# is excluded because it defines a second JNI_OnLoad and that symbol must stay
+# ours.
 set(SHADOWHOOK_ROOT "" CACHE PATH "Root of the fetched ShadowHook source tree")
 if(NOT SHADOWHOOK_ROOT)
   message(FATAL_ERROR "Pass -DSHADOWHOOK_ROOT=<dir of the fetched ShadowHook source tree>")
@@ -56,8 +57,8 @@ target_include_directories(shadowhook PRIVATE
 )
 target_include_directories(shadowhook PUBLIC "${SHADOWHOOK_SRC}/include")
 
-# Hidden visibility keeps every shadowhook_* and sh_* symbol out of our
-# .dynsym; --exclude-libs,ALL below does the same for the archive members.
+# Hidden visibility keeps shadowhook_* and sh_* out of .dynsym; the archive is
+# stripped from the export table too by --exclude-libs,ALL on the final link.
 target_compile_options(shadowhook PRIVATE
   -Oz
   -fvisibility=hidden
@@ -72,7 +73,7 @@ target_compile_options(shadowhook PRIVATE
 set_target_properties(shadowhook PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- Project -----------------------------------------------------------------
-# file logging; OFF gives the smallest .so (-DBOKU_LOG=OFF)
+# File logging is on by default; -DBOKU_LOG=OFF drops it for the smallest .so.
 option(BOKU_LOG "Enable file logging" ON)
 
 add_library(febrian SHARED
@@ -128,7 +129,8 @@ target_link_options(febrian PRIVATE
   -Wl,--pack-dyn-relocs=android
 )
 
-# dl: dlopen/dlsym/dladdr, log: ShadowHook diagnostics, shadowhook: static archive
+# shadowhook: static archive. dl: dlopen, dlsym, dladdr. log: ShadowHook's own
+# __android_log_print calls, which stay linked even with debuggable false.
 target_link_libraries(febrian PRIVATE shadowhook dl log)
 
 if(BOKU_LOG)
