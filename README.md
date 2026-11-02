@@ -8,10 +8,13 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **IAP berbayar** — pembelian disimulasikan, tidak perlu Play Billing.
 - **Konten terkunci** — semua tile, model, dan melody langsung terbuka.
 - **Nama profil terpotong** — batas input nama dinaikkan.
-- **Tanggal lahir dibatasi** — hari dan tahun tidak lagi dipotong.
+- **Tanggal lahir dibatasi** — hari, bulan, dan tahun tidak lagi dipotong.
+- **Tanggal registrasi aneh** — tanggal akun selalu tampil 11 Februari 2112.
+- **Email ditolak** — format email bebas diterima.
+- **Teks perkenalan terpotong** — batas panjang perkenalan dinaikkan.
 - **Host tidak mengizinkan save world** — save tetap bisa dilakukan.
 - **Room ber-password** — bisa dimasuki tanpa mengetik password.
-- **Posisi skin sempit** — slider X/Y diperlebar ke -20..20.
+- **Posisi skin sempit** — slider X/Y diperlebar ke -25..25.
 - **Gingerbread cepat habis** — kue tetap di tangan setelah 3 gigitan.
 - **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
   kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
@@ -20,6 +23,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   berukuran besar tetap tampil di daftar dan bisa dimasuki.
 - **World baru terlalu sempit** — batas slider ukuran world dinaikkan ke preset terbesar game
   (600x300), jadi world baru bisa dibuat lebih luas dari batas perangkat ini.
+- **Pistol dan blaster lambat** — jeda tembak dihilangkan, tombol bisa ditekan berulang.
+- **Amunisi blaster lemah** — blaster selalu memakai amunisi terkuat.
+- **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
@@ -47,6 +53,10 @@ log ikut hilang.
   diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai.
 - Kemampuan host seperti kick, izin pemain, dan pengaturan room diperiksa di sisi server, jadi
   tidak dimodifikasi dan tetap mengikuti aturan room.
+- Tanggal registrasi yang ditampilkan hanya berubah di aplikasi; data akun di server tidak ikut
+  berubah.
+- Pemeriksaan format email hanya ada di aplikasi. Server tetap bisa menolak alamat yang tidak
+  valid saat akun dibuat atau diubah.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.
