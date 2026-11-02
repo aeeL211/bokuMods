@@ -22,8 +22,8 @@ Field uidField = {};
 // carries the email of another account, so an unblocked row would print
 // nothing. The account id stands in, so the row still shows a value.
 void emailHook(void* self, void* objs, void* labels, void* text, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*, void*, void*, void*)>(
-        target(T_ACCOUNT_EMAIL).orig);
+    auto orig =
+        reinterpret_cast<void (*)(void*, void*, void*, void*, void*)>(target(T_ACCOUNT_EMAIL).orig);
     if (!orig)
         return;
 
