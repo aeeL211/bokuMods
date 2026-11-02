@@ -86,17 +86,19 @@ void explosionHook(void* self, void* payload, void* method) {
 // set, which is the game's own path for a forced edit.
 void addRequestHook(void* self, Vector2 pos, int id, void* str, int font, bool eff, bool,
                     bool callback, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, Vector2, int, void*, int, bool, bool, bool,
-                                          void*)>(target(T_TILE_ADD_REQUEST).orig);
+    auto orig =
+        reinterpret_cast<void (*)(void*, Vector2, int, void*, int, bool, bool, bool, void*)>(
+            target(T_TILE_ADD_REQUEST).orig);
     if (!orig)
         return;
     orig(self, pos, id, str, font, eff, true, callback, method);
 }
 
-void removeRequestHook(void* self, Vector2 pos, int id, void* str, int effType, bool,
-                       bool destroy, bool callback, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, Vector2, int, void*, int, bool, bool, bool,
-                                          void*)>(target(T_TILE_REMOVE_REQUEST).orig);
+void removeRequestHook(void* self, Vector2 pos, int id, void* str, int effType, bool, bool destroy,
+                       bool callback, void* method) {
+    auto orig =
+        reinterpret_cast<void (*)(void*, Vector2, int, void*, int, bool, bool, bool, void*)>(
+            target(T_TILE_REMOVE_REQUEST).orig);
     if (!orig)
         return;
     orig(self, pos, id, str, effType, true, destroy, callback, method);
@@ -105,9 +107,9 @@ void removeRequestHook(void* self, Vector2 pos, int id, void* str, int effType, 
 void replaceRequestHook(void* self, Vector2 removePos, int removeId, void* removeStr,
                         int removeFont, Vector2 addPos, int addId, void* addStr, int addFont,
                         bool eff, bool, bool callback, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, Vector2, int, void*, int, Vector2, int, void*,
-                                          int, bool, bool, bool, void*)>(
-        target(T_TILE_REPLACE_REQUEST).orig);
+    auto orig =
+        reinterpret_cast<void (*)(void*, Vector2, int, void*, int, Vector2, int, void*, int, bool,
+                                  bool, bool, void*)>(target(T_TILE_REPLACE_REQUEST).orig);
     if (!orig)
         return;
     orig(self, removePos, removeId, removeStr, removeFont, addPos, addId, addStr, addFont, eff,
@@ -117,10 +119,9 @@ void replaceRequestHook(void* self, Vector2 removePos, int removeId, void* remov
 } // namespace
 
 void installHostHooks() {
-    bool keyReady = installHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(keyHook),
-                                "Player__Manager.Key");
-    pipeReady = keyReady &&
-                resolveField(classOf("Net__Multi__Transfer__Pipe"), "multi", pipeMulti);
+    bool keyReady =
+        installHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(keyHook), "Player__Manager.Key");
+    pipeReady = keyReady && resolveField(classOf("Net__Multi__Transfer__Pipe"), "multi", pipeMulti);
     LOGI("Host sender field %s", pipeReady ? "OK" : "missing, kick and explosion stay vanilla");
 
     installHook(target(T_HOST_STATUS), reinterpret_cast<void*>(hostStatusHook),

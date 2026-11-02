@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "hook.h"
 #include "il2cpp_api.h"
 #include "jni_bridge.h"
 #include "log.h"
