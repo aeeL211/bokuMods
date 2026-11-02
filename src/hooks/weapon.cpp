@@ -13,7 +13,7 @@ namespace {
 constexpr float kIntervalEpsilon = 0.0001f;
 
 // The blaster's configured full charge step. The id lookup picks the charged
-// projectile only when the charge step equals this value.
+// projectile only when the charge counter equals this value.
 constexpr int32_t kFullChargeStep = 3;
 
 Field cmnManagerField = {};
@@ -22,8 +22,10 @@ Field stateField = {};
 Field stateTimerField = {};
 Field rockField = {};
 Field intervalField = {};
-Field intervalFrontField = {};
+Field intervalTimerField = {};
 Field chargeField = {};
+// The charge counter lives in the field the dump calls "active", but the game
+// reads, increments and compares it as a 32-bit step count.
 Field stepField = {};
 Field comboField = {};
 Field weaponHhField = {};
@@ -78,7 +80,7 @@ void blasterEndUpdateHook(void* self, void* method) {
             void* rock = readPtr(state, rockField);
             void* interval = readPtr(rock, intervalField);
             if (interval)
-                writeFloat(interval, intervalFrontField,
+                writeFloat(interval, intervalTimerField,
                            readFloat(time, shootIntervalField) - kIntervalEpsilon);
         } else {
             writeFloat(state, stateTimerField, readFloat(time, shootEndField) - kIntervalEpsilon);
@@ -115,9 +117,9 @@ bool resolveWeaponFields() {
         !resolveField(fieldClass(stateField), "combo", comboField) ||
         !resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) ||
         !resolveField(fieldClass(rockField), "interval", intervalField) ||
-        !resolveField(fieldClass(intervalField), "front", intervalFrontField) ||
+        !resolveField(fieldClass(intervalField), "timer", intervalTimerField) ||
         !resolveField(fieldClass(rockField), "charge", chargeField) ||
-        !resolveField(fieldClass(chargeField), "step", stepField) ||
+        !resolveField(fieldClass(chargeField), "active", stepField) ||
         !resolveField(fieldClass(weaponHhField), "_rockman__Rock_Buster", hhRockField) ||
         !resolveField(fieldClass(hhRockField), "shoot", shootField) ||
         !resolveField(fieldClass(shootField), "_time", shootTimeField) ||
