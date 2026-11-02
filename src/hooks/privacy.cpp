@@ -44,8 +44,7 @@ void emailHook(void* self, void* objs, void* labels, void* text, void* method) {
 // The detail screens fill their email row straight from the selected user, not
 // through the formatter above. The account id is written for the duration of
 // the refresh, then the original value is put back.
-void refreshEmail(void* self, void (*orig)(void*, void*), void* method,
-                  const Field& accountField) {
+void refreshEmail(void* self, void (*orig)(void*, void*), void* method, const Field& accountField) {
     void* account = readPtr(self, accountField);
     void* user = readPtr(account, userSelectField);
     void* saved = readPtr(user, emailField);

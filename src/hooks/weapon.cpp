@@ -255,8 +255,8 @@ bool resolveWeaponFields() {
     void* stateManager = classOf("Player__State");
     return resolveField(stateManager, "m", stateManagerField) &&
            resolveField(weapon, "m", weaponManagerField) &&
-           resolveField(weapon, "cmn", weaponCmnField) &&
-           resolveField(cmn, "m", cmnManagerField) && resolveField(cmn, "chr_Hh", cmnHhField) &&
+           resolveField(weapon, "cmn", weaponCmnField) && resolveField(cmn, "m", cmnManagerField) &&
+           resolveField(cmn, "chr_Hh", cmnHhField) &&
            resolveField(fieldClass(weaponManagerField), "__state", stateField) &&
            resolveField(fieldClass(stateField), "combo", comboField) &&
            resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) &&
