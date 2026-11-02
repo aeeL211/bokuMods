@@ -53,6 +53,7 @@ void* worker(void*) {
     installIapHooks();
     installMultiplayerHooks();
     installChatHooks();
+    installSensitiveHooks();
     installTextInputHooks();
     installProfileHooks();
     installPasswordHooks();

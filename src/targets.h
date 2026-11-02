@@ -58,6 +58,7 @@ enum TargetId {
     T_GUEST_MSG_RECEIVE,
     T_CHAT_MSG_RECEIVE,
     T_PLAYER_KEY,
+    T_SENSITIVE_WORD,
     T_COUNT,
 };
 

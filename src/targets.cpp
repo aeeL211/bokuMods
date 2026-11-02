@@ -72,6 +72,7 @@ Target targets[T_COUNT] = {
     {"Net__Multi__Guest__Chat", "Msg__Receive__Text", 3, nullptr, nullptr, nullptr},
     {"Net__Multi__Chat", "Msg__Receive__Text", 2, nullptr, nullptr, nullptr},
     {"Player__Manager", "Key", 0, nullptr, nullptr, nullptr},
+    {"UI__Note", "Term__Sensitive_Word", 3, nullptr, nullptr, nullptr},
 };
 
 } // namespace

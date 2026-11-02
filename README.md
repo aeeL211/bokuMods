@@ -31,6 +31,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat.
+- **Kata kasar disensor** — semua pengecekan kata terlarang dilewati, jadi chat, nama, dan teks
+  profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
 
 ## Pemasangan
@@ -66,5 +68,7 @@ log ikut hilang.
 - Isi pesan pribadi hanya versi teks; pesan suara pribadi tidak ditampilkan. Kalau pengirim
   sudah keluar room saat pesan masuk, chat room menolak nama itu dan hanya log yang mencatat.
   Setiap DM yang tampil juga bisa memicu bunyi notifikasi chat.
+- Sensor kata hanya dilewati di aplikasi yang memakai mod; klien tanpa mod tetap menyaring kata
+  yang dikirim maupun diterimanya.
 - Gunakan di akun sendiri; mod ini bisa melanggar ketentuan layanan game.
 - Lisensi pihak ketiga ada di `THIRD_PARTY_NOTICES.md`.
