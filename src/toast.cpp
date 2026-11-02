@@ -238,31 +238,24 @@ bool readBytes(const char* s, size_t len, NameBuffer& buf) {
     return false;
 }
 
-// The login name is published by the mod manager app, not by the game, so it
-// lives under that app's external files dir. The game's own package is read at
-// runtime, which keeps the path free of a hardcoded package name.
-bool userNamePath(char* out, size_t size) {
+// The name file belongs next to the installed game, but an earlier build kept
+// it in the <package>.mods dir, which is also the game's own dir once the clone
+// takes that name. Both are tried, so either layout of the file is read.
+bool userNamePath(char* out, size_t size, bool modsDir) {
     char root[512];
-    if (!externalStorageRoot(root, sizeof(root))) {
-        LOGE("User name root unavailable");
+    if (!externalStorageRoot(root, sizeof(root)))
         return false;
-    }
     char package[192];
-    if (!appPackage(package, sizeof(package))) {
-        LOGE("User name package unavailable");
+    if (!appPackage(package, sizeof(package)))
         return false;
-    }
-    snprintf(out, size, "%s/Android/data/%s.mods/files/Setting/User_Name.txt", root, package);
+    snprintf(out, size, "%s/Android/data/%s%s/files/Setting/User_Name.txt", root, package,
+             modsDir ? ".mods" : "");
     return true;
 }
 
 // Read at toast time instead of caching: the file is small, the toast is shown
 // once per session, and an edited name is picked up on the next launch.
-bool readName(char* out, size_t size) {
-    char path[768];
-    if (!userNamePath(path, sizeof(path)))
-        return false;
-
+bool readNameFile(const char* path, char* out, size_t size) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
         int err = errno;
@@ -312,6 +305,19 @@ bool readName(char* out, size_t size) {
     buf.out[buf.used] = '\0';
     LOGI("User name loaded: %s", buf.out);
     return true;
+}
+
+bool readName(char* out, size_t size) {
+    char path[900];
+    if (!userNamePath(path, sizeof(path), false)) {
+        LOGE("User name location unavailable");
+        return false;
+    }
+    if (readNameFile(path, out, size))
+        return true;
+    if (!userNamePath(path, sizeof(path), true))
+        return false;
+    return readNameFile(path, out, size);
 }
 
 } // namespace
