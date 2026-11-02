@@ -22,8 +22,8 @@
 
 namespace {
 
-// The log lives only in the app's external files dir, i.e.
-// Android/data/<package>/files/bokumods.log. The path comes from
+// Each session writes its own file in the app's external files dir, i.e.
+// Android/data/<package>/files/bokumods-YYYYMMDD-HHMMSS.log. The path comes from
 // Context.getExternalFilesDir() through UnityPlayer.currentActivity, so the
 // package name is never hardcoded and a renamed package still works.
 std::atomic<int> logFd{-1};
@@ -123,7 +123,7 @@ bool filesDir(char* out, size_t size) {
     if (path) {
         chars = env->GetStringUTFChars(path, nullptr);
         if (chars) {
-            snprintf(out, size, "%s/bokumods.log", chars);
+            snprintf(out, size, "%s", chars);
             ok = true;
         }
     }
@@ -144,7 +144,7 @@ bool filesDir(char* out, size_t size) {
 }
 
 // Fallback for the brief window before UnityPlayer.currentActivity is set:
-// build the same path from the process package and the storage root. The
+// build the same dir from the process package and the storage root. The
 // package dir exists from install time, so a missing or unwritable one means
 // the guess is wrong (renamed package, clone, other mount) and creating it
 // would hide the log outside the app sandbox.
@@ -160,90 +160,29 @@ bool legacyDir(char* out, size_t size) {
     snprintf(dir, sizeof(dir), "%s/Android/data/%s/files", root, package);
     if (access(dir, W_OK | X_OK) != 0)
         return false;
-    snprintf(out, size, "%s/bokumods.log", dir);
+    snprintf(out, size, "%s", dir);
     return true;
 }
 
-// A previous session can leave a file this process may not append to (other
-// owner or read-only mode). The permission is repaired once here; the caller
-// then replaces a file that still refuses the open.
-int openAppend(const char* path, int* err) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
-    if (fd >= 0)
-        return fd;
-    *err = errno;
-    if (*err != EACCES && *err != EPERM)
-        return -1;
-
-    chmod(path, 0666);
-    fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
-    if (fd >= 0)
-        return fd;
-    *err = errno;
+// One file per session, named with the local open time. O_EXCL never touches an
+// earlier file; two sessions opened in the same second get a counter instead of
+// sharing a name.
+int openNew(const char* dir, char* path, size_t pathSize, int* err) {
+    char stamp[32];
+    formatTime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S");
+    for (int i = 0; i < 100; i++) {
+        if (i == 0)
+            snprintf(path, pathSize, "%s/bokumods-%s.log", dir, stamp);
+        else
+            snprintf(path, pathSize, "%s/bokumods-%s-%d.log", dir, stamp, i);
+        int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
+        if (fd >= 0)
+            return fd;
+        *err = errno;
+        if (*err != EEXIST)
+            return -1;
+    }
     return -1;
-}
-
-// Copies an older log into the open file. The source is unreadable when it
-// belongs to another app, which the caller reports instead of failing.
-bool copyInto(const char* from, int to) {
-    int src = open(from, O_RDONLY | O_CLOEXEC);
-    if (src < 0)
-        return false;
-    bool ok = true;
-    char buffer[4096];
-    ssize_t n;
-    while ((n = read(src, buffer, sizeof(buffer))) > 0) {
-        if (write(to, buffer, static_cast<size_t>(n)) != n) {
-            ok = false;
-            break;
-        }
-    }
-    if (n < 0)
-        ok = false;
-    close(src);
-    return ok;
-}
-
-// The log stays in one file, so a file that cannot be appended to is moved to
-// <path>.old and a fresh one takes the same path. Earlier bytes are copied back
-// when they can be read; otherwise the moved file keeps them.
-int replaceFile(const char* path, int* err, bool* copied) {
-    char old[600];
-    snprintf(old, sizeof(old), "%s.old", path);
-    // rename replaces an earlier regular .old file, so a second repair keeps
-    // one backup instead of piling up suffixes.
-    if (rename(path, old) != 0) {
-        *err = errno;
-        return -1;
-    }
-    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
-    if (fd < 0) {
-        *err = errno;
-        rename(old, path);
-        return -1;
-    }
-    *copied = copyInto(old, fd);
-    if (*copied)
-        unlink(old);
-    return fd;
-}
-
-// A session killed in the middle of a line leaves no newline, so without this
-// the next Log start header would be glued to the last old bytes.
-bool endsWithNewline(const char* path, long long size) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
-        return true;
-    char last = '\n';
-    ssize_t n = pread(fd, &last, 1, size - 1);
-    close(fd);
-    return n != 1 || last == '\n';
-}
-
-// Only an object that blocks the path is replaced. A full disk or an I/O error
-// leaves the old file exactly where it is, so no session is ever lost.
-bool replaceable(int err) {
-    return err == EACCES || err == EPERM || err == EISDIR || err == ENOTDIR || err == ELOOP;
 }
 
 bool ensureOpen() {
@@ -379,40 +318,27 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
 void logOpenFile() {
     if (logFd >= 0)
         return;
-    char path[512];
-    bool fromActivity = filesDir(path, sizeof(path));
-    if (!fromActivity && !legacyDir(path, sizeof(path)))
+    char dir[512];
+    bool fromActivity = filesDir(dir, sizeof(dir));
+    if (!fromActivity && !legacyDir(dir, sizeof(dir)))
         return;
 
-    char dir[512];
-    snprintf(dir, sizeof(dir), "%s", path);
-    char* slash = strrchr(dir, '/');
-    if (slash) {
-        *slash = '\0';
-        mkdir(dir, 0777);
-    }
+    mkdir(dir, 0777);
 
+    char path[600];
     int err = 0;
-    int fd = openAppend(path, &err);
-    bool replaced = false;
-    bool copied = false;
-    // A second name would leave the earlier lines behind, so a file that still
-    // refuses the open is replaced in place instead of starting bokumods-2.log.
-    if (fd < 0 && replaceable(err)) {
-        struct stat st = {};
-        if (lstat(path, &st) == 0) {
-            fd = replaceFile(path, &err, &copied);
-            replaced = fd >= 0;
-        }
+    int fd = openNew(dir, path, sizeof(path), &err);
+    bool repaired = false;
+    // The dir is the only thing this process may have to repair; when the
+    // create still fails, the next ensureOpen retry runs two seconds later.
+    if (fd < 0 && (err == EACCES || err == EPERM)) {
+        chmod(dir, 0777);
+        fd = openNew(dir, path, sizeof(path), &err);
+        repaired = fd >= 0;
     }
     if (fd < 0)
         return;
     logFd = fd;
-
-    struct stat st = {};
-    long long kept = fstat(fd, &st) == 0 ? static_cast<long long>(st.st_size) : 0;
-    if (kept > 0 && !endsWithNewline(path, kept))
-        write(fd, "\n", 1);
 
     char clock[16];
     char date[16];
@@ -422,22 +348,14 @@ void logOpenFile() {
     int n = snprintf(line, sizeof(line), "[%s] INFO  Log start (%s)\n", clock, date);
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
-    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (append%s)\n", clock, path,
+    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (new session%s)\n", clock, path,
                  fromActivity ? "" : ", package fallback");
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
-    if (kept > 0)
-        n = snprintf(line, sizeof(line), "[%s] INFO  Log kept: %lld bytes from earlier runs\n",
-                     clock, kept);
-    else
-        n = snprintf(line, sizeof(line), "[%s] INFO  Log kept: new file\n", clock);
-    if (n > 0)
-        write(fd, line, static_cast<size_t>(n));
-    if (replaced) {
+    if (repaired) {
         n = snprintf(line, sizeof(line),
-                     "[%s] ERROR Log replaced: %s could not be appended (%d %s), "
-                     "earlier bytes %s\n",
-                     clock, path, err, strerror(err), copied ? "copied in" : "moved to .old");
+                     "[%s] ERROR Log dir was not writable (%d %s), mode fixed\n", clock, err,
+                     strerror(err));
         if (n > 0)
             write(fd, line, static_cast<size_t>(n));
     }

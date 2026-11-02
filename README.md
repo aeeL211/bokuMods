@@ -30,7 +30,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Amunisi blaster lemah** — blaster selalu memakai amunisi terkuat.
 - **Layar bergetar dan tile berpecah** — getaran kamera dan pecahan tile dimatikan.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
-  akun selalu terlihat.
+  akun selalu terlihat. Email pemain lain tidak ikut diunduh game, jadi baris email menampilkan
+  ID akun sebagai gantinya, bukan kotak kosong.
 - **Kata kasar disensor** — semua pengecekan kata terlarang dilewati, jadi chat, nama, dan teks
   profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
@@ -42,11 +43,12 @@ ShadowHook sudah ikut di dalam file itu, jadi tidak ada library tambahan yang pe
 
 ## Log
 
-Catatan ada di `Android/data/<package>/files/bokumods.log`, mengikuti package game yang
-terpasang. APK asli memakai `com.pixticle.bokuboku`, salinan mod memakai
-`com.pixticle.bokuboku.mods`. Satu file dipakai terus dan ditambahi tiap sesi selama aplikasi
-di-update tanpa di-uninstall; memasang ulang dari awal menghapus folder data itu, jadi riwayat
-log ikut hilang.
+Setiap sesi menulis file sendiri di `Android/data/<package>/files/`, dengan nama
+`bokumods-YYYYMMDD-HHMMSS.log` mengikuti waktu lokal saat file dibuka. Package mengikuti game
+yang terpasang; APK asli memakai `com.pixticle.bokuboku`, salinan mod memakai
+`com.pixticle.bokuboku.mods`. Sesi lama tidak ditimpa dan tidak dihapus, jadi tiap kali game
+dijalankan akan ada satu file baru, dan file dengan waktu paling akhir adalah sesi terakhir.
+Kalau dua sesi terbuka pada detik yang sama, file kedua diberi akhiran `-2`.
 
 ## Catatan
 
