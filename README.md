@@ -13,10 +13,6 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Room ber-password** — bisa dimasuki tanpa mengetik password.
 - **Posisi skin sempit** — slider X/Y diperlebar ke -20..20.
 - **Gingerbread cepat habis** — kue tetap di tangan setelah 3 gigitan.
-- **Kemampuan host terkunci** — panel host terbuka dan tetap aktif juga di room orang lain, jadi
-  kick, izin pemain, build/destroy, save world, dan pengaturan room bisa dipakai. Di luar room
-  panel itu tetap tertutup, jadi tombol tutup room tidak lagi memunculkan dialog "Ruangan
-  tertutup".
 - **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
   kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
   di daftar model dan bisa dipakai.
@@ -35,17 +31,22 @@ ShadowHook sudah ikut di dalam file itu, jadi tidak ada library tambahan yang pe
 
 ## Log
 
-Catatan ada di `Android/data/com.pixticle.bokuboku/files/bokumods.log`. Satu file dipakai terus
-dan ditambahi tiap sesi, jadi riwayat tidak hilang.
+Catatan ada di `Android/data/<package>/files/bokumods.log`, mengikuti package game yang
+terpasang. APK asli memakai `com.pixticle.bokuboku`, salinan mod memakai
+`com.pixticle.bokuboku.mods`. Satu file dipakai terus dan ditambahi tiap sesi selama aplikasi
+di-update tanpa di-uninstall; memasang ulang dari awal menghapus folder data itu, jadi riwayat
+log ikut hilang.
 
 ## Catatan
 
 - Hanya `arm64-v8a`.
 - Skin tersimpan sebagai slot model game, yaitu
-  `Android/data/com.pixticle.bokuboku/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor
-  kosong pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.
+  `Android/data/<package>/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor kosong
+  pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.
   Slot yang sudah ada dibaca sekali di awal, jadi skin yang sudah pernah tersimpan tidak
   diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai.
+- Kemampuan host seperti kick, izin pemain, dan pengaturan room diperiksa di sisi server, jadi
+  tidak dimodifikasi dan tetap mengikuti aturan room.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.
