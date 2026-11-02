@@ -9,9 +9,8 @@
 
 namespace {
 
-// A shared-state timer far beyond its configured tail, so Term_Timer reports
-// the wait as done on the next update.
-constexpr float kNoWait = 1.0e9f;
+// Just under the configured interval, so the next update crosses it.
+constexpr float kIntervalEpsilon = 0.0001f;
 
 // The blaster's configured full charge step. The id lookup picks the charged
 // projectile only when the charge step equals this value.
@@ -22,9 +21,17 @@ Field weaponManagerField = {};
 Field stateField = {};
 Field stateTimerField = {};
 Field rockField = {};
+Field intervalField = {};
+Field intervalFrontField = {};
 Field chargeField = {};
 Field stepField = {};
 Field comboField = {};
+Field weaponHhField = {};
+Field hhRockField = {};
+Field shootField = {};
+Field shootTimeField = {};
+Field shootEndField = {};
+Field shootIntervalField = {};
 
 void* playerState(void* self, const Field& managerField) {
     void* manager = readPtr(self, managerField);
@@ -40,7 +47,8 @@ bool gunEndHook(void*, void*) { return true; }
 bool blasterActionEndHook(void*, void*) { return true; }
 
 // The end state normally waits out the shot interval. Answering with the held
-// combo flag starts the next shot at once while the button stays down.
+// combo flag starts the next shot at once while the button stays down. This is
+// the path used by every stance except the weapon one below.
 bool blasterEndToActionHook(void* self, void* method) {
     void* state = playerState(self, cmnManagerField);
     if (state && comboField.field)
@@ -51,17 +59,31 @@ bool blasterEndToActionHook(void* self, void* method) {
     return orig && orig(self, method);
 }
 
-// Once the button is released, the end state plays a short tail through the
-// shared state timer. Marking it overdue drops that tail; a new press is handled
-// by the end-to-action hook instead.
+// The weapon class runs its own end update instead of End__To__Action. With the
+// button held, the interval timer is moved just under its configured duration so
+// the stock update starts the next shot on this frame. With the button released,
+// the state timer is moved the same way, so the end tail is skipped at once.
 void blasterEndUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_END_UPDATE).orig);
     if (!orig)
         return;
 
     void* state = playerState(self, weaponManagerField);
-    if (state && readInt(state, comboField) == 0)
-        writeFloat(state, stateTimerField, kNoWait);
+    void* hh = readPtr(self, weaponHhField);
+    void* config = readPtr(hh, hhRockField);
+    void* shoot = readPtr(config, shootField);
+    void* time = readPtr(shoot, shootTimeField);
+    if (state && time) {
+        if (readInt(state, comboField) != 0) {
+            void* rock = readPtr(state, rockField);
+            void* interval = readPtr(rock, intervalField);
+            if (interval)
+                writeFloat(interval, intervalFrontField,
+                           readFloat(time, shootIntervalField) - kIntervalEpsilon);
+        } else {
+            writeFloat(state, stateTimerField, readFloat(time, shootEndField) - kIntervalEpsilon);
+        }
+    }
 
     orig(self, method);
 }
@@ -87,12 +109,20 @@ bool resolveWeaponFields() {
     void* weapon = classOf("Player__State__Std__Action__Hh__Weapon");
     if (!resolveField(cmn, "m", cmnManagerField) ||
         !resolveField(weapon, "m", weaponManagerField) ||
+        !resolveField(weapon, "chr_Hh", weaponHhField) ||
         !resolveField(fieldClass(weaponManagerField), "__state", stateField) ||
         !resolveField(fieldClass(stateField), "timer", stateTimerField) ||
         !resolveField(fieldClass(stateField), "combo", comboField) ||
         !resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) ||
+        !resolveField(fieldClass(rockField), "interval", intervalField) ||
+        !resolveField(fieldClass(intervalField), "front", intervalFrontField) ||
         !resolveField(fieldClass(rockField), "charge", chargeField) ||
-        !resolveField(fieldClass(chargeField), "step", stepField))
+        !resolveField(fieldClass(chargeField), "step", stepField) ||
+        !resolveField(fieldClass(weaponHhField), "_rockman__Rock_Buster", hhRockField) ||
+        !resolveField(fieldClass(hhRockField), "shoot", shootField) ||
+        !resolveField(fieldClass(shootField), "_time", shootTimeField) ||
+        !resolveField(fieldClass(shootTimeField), "end", shootEndField) ||
+        !resolveField(fieldClass(shootTimeField), "interval", shootIntervalField))
         return false;
     return true;
 }
