@@ -53,6 +53,7 @@ Target targets[T_COUNT] = {
     {"Net__Account__Friend_Profile", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible__Email", 1, nullptr, nullptr, nullptr},
+    {"Net__Account__Manager", "Email", 3, nullptr, nullptr, nullptr},
     {"Player__State__Cmn", "Term__Gun_Shoot__End__Update__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Cmn", "Term__Rockman__Rock_Buster__Action__Update__End", 0, nullptr, nullptr,
      nullptr},
