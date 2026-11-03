@@ -98,6 +98,7 @@ add_library(febrian SHARED
   src/hooks/account.cpp
   src/hooks/weapon.cpp
   src/hooks/effects.cpp
+  src/hooks/knockback.cpp
   src/hooks/skin.cpp
   src/hooks/slots.cpp
 )

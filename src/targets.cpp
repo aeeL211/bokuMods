@@ -84,6 +84,7 @@ Target targets[T_COUNT] = {
     {"Player__State__Cmn", "Rockman__Rock_Buster__End__Dir", 0, nullptr, nullptr, nullptr},
     {"Net__Account__Friend_Profile", "Detail__Refresh", 0, nullptr, nullptr, nullptr},
     {"Net__Account__Add_Friend", "Detail__Refresh", 0, nullptr, nullptr, nullptr},
+    {"Player__State__Std__Air", "Tumble__Explode", 3, nullptr, nullptr, nullptr},
 };
 
 } // namespace
