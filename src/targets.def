@@ -82,6 +82,7 @@ T_GUEST_NAME|Guest__Manager|Account__User_Name|2|
 T_DATA_MODEL_NAME|Data__Model|File__Write__Name|2|
 T_CHAT_SEND|Net__Multi__Chat|Term__Send_|2|
 T_CHAT_CLEAR|Net__Multi__Chat|Input_Field__Clear|0|
+T_INPUT_SEND|Net__Multi__Chat|Input__Send|0|
 T_KICK_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Kick__Send|1|
 T_ROOM_CLOSE_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Room_Close__Send|0|
 T_EXPLOSION_PLAYER_SEND|Net__Multi__Transfer__Host|Explosion__Player__Send|3|

@@ -56,9 +56,11 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 
 ## Perintah chat
 
-Ketik perintah di kotak chat room. Baris perintah tidak pernah sampai ke pemain lain: jawabannya
-hanya muncul di chat room perangkat sendiri, dan kotak chat langsung dikosongkan. Teks yang
-diawali `/` tapi bukan perintah yang dikenal tetap terkirim sebagai chat biasa.
+Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
+Baris perintah tidak pernah sampai ke pemain lain: jawabannya hanya muncul di chat room perangkat
+sendiri, dan kotak chat langsung dikosongkan. Kalau room belum berisi pemain lain, jawaban tampil
+sebagai toast karena chat room tidak punya baris pengirim untuk ditempeli. Teks yang diawali `/`
+tapi bukan perintah yang dikenal tetap terkirim sebagai chat biasa.
 
 Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain menyusul `#2`,
 `#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain

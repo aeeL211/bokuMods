@@ -9,10 +9,12 @@
 #include "il2cpp_api.h"
 #include "log.h"
 #include "targets.h"
+#include "toast.h"
 
 namespace {
 
 using ChatSendFn = bool (*)(void*, void*, bool, void*);
+using SendInputFn = void (*)(void*, void*);
 using KeyFn = void* (*)(void*, void*);
 using KickFn = void (*)(void*, void*, void*);
 using EmptySendFn = void (*)(void*, void*);
@@ -29,6 +31,8 @@ constexpr size_t kKeySize = 16;
 constexpr int32_t kExplosionStep = 1;
 
 Field chatManager = {};
+Field chatInput = {};
+Field inputText = {};
 Field managerCamera = {};
 Field managerGuests = {};
 Field managerMulti = {};
@@ -64,6 +68,7 @@ struct Session {
     void* player;
     void* key;
     void* sender;
+    bool alone;
 };
 
 void readPoint(void* obj, const Field& f, float& x, float& y) {
@@ -186,14 +191,22 @@ void* displayKey(void* chat, void* mine) {
     return first ? first : mine;
 }
 
-// The room chat labels the sender itself, so the body is the whole line.
+// The room chat labels the sender itself, so the body is the whole line. A room
+// with no other player has no guest row the line can belong to and the game
+// drops it, so the answer goes to a toast there instead.
 void reply(Session& s, const char* text) {
+    if (s.alone) {
+        toast(text);
+        return;
+    }
     auto roomChat = reinterpret_cast<RoomChatFn>(target(T_CHAT_MSG_RECEIVE).addr);
     void* body = utf16Of(text);
     if (!roomChat || !s.sender || !body)
         return;
     roomChat(s.chat, s.sender, body, target(T_CHAT_MSG_RECEIVE).method);
 }
+
+void* fieldText(void* chat) { return readPtr(readPtr(chat, chatInput), inputText); }
 
 bool openSession(void* chat, Session& s) {
     void* manager = readPtr(chat, chatManager);
@@ -204,6 +217,8 @@ bool openSession(void* chat, Session& s) {
         return false;
     s.key = ownKey(s.player);
     s.sender = displayKey(chat, s.key);
+    Slot slots[kMaxPlayers];
+    s.alone = collectPlayers(chat, s.key, slots) <= 1;
     return true;
 }
 
@@ -489,25 +504,47 @@ bool commandText(void* text, char* out, size_t size) {
     return true;
 }
 
-// The typed line never reaches the network: the handler answers through the
-// local room chat and the box is cleared with the game's own reset.
-bool sendHook(void* self, void* text, bool voice, void* method) {
+// A known command is answered locally and the box is cleared with the game's own
+// reset, so the typed line never reaches the network.
+bool handleCommand(void* chat, void* text) {
     char line[kLineSize];
-    if (!voice && ready && commandText(text, line, sizeof(line))) {
-        Session s;
-        if (openSession(self, s)) {
-            char* argv[kMaxTokens];
-            int argc = split(line, argv, kMaxTokens);
-            if (argc > 0 && runCommand(s, argc, argv)) {
-                auto clear = reinterpret_cast<ClearFn>(target(T_CHAT_CLEAR).addr);
-                if (clear)
-                    clear(self, target(T_CHAT_CLEAR).method);
-                return false;
-            }
-        }
+    if (!ready || !commandText(text, line, sizeof(line)))
+        return false;
+    Session s;
+    if (!openSession(chat, s)) {
+        LOGE("Command session missing: no player or room");
+        return false;
     }
+    char* argv[kMaxTokens];
+    int argc = split(line, argv, kMaxTokens);
+    if (argc < 1 || !runCommand(s, argc, argv))
+        return false;
+    auto clear = reinterpret_cast<ClearFn>(target(T_CHAT_CLEAR).addr);
+    if (clear)
+        clear(chat, target(T_CHAT_CLEAR).method);
+    return true;
+}
+
+// The validator receives the same string the send uses, so a command is answered
+// here and the send is skipped by returning false.
+bool sendHook(void* self, void* text, bool voice, void* method) {
+    LOGI("Chat send: len=%d voice=%d", stringLength(text), voice ? 1 : 0);
+    if (handleCommand(self, text))
+        return false;
     auto orig = reinterpret_cast<ChatSendFn>(target(T_CHAT_SEND).orig);
     return orig ? orig(self, text, voice, method) : false;
+}
+
+// The send button and the keyboard action both land here with the field already
+// filled, so the command is taken before the validator runs at all.
+void sendButtonHook(void* self, void* method) {
+    void* text = fieldText(self);
+    LOGI("Send button: len=%d", stringLength(text));
+    if (handleCommand(self, text))
+        return;
+    auto orig = reinterpret_cast<SendInputFn>(target(T_INPUT_SEND).orig);
+    if (orig)
+        orig(self, method);
 }
 
 void* keyHook(void* self, void* method) {
@@ -519,6 +556,9 @@ void* keyHook(void* self, void* method) {
 
 bool resolveFields() {
     if (!resolveField(classOf("Net__Multi__Chat"), "a", chatManager))
+        return false;
+    if (!resolveField(classOf("Net__Multi__Chat"), "_input_Field", chatInput) ||
+        !resolveField(fieldClass(chatInput), "text", inputText))
         return false;
     void* managerClass = fieldClass(chatManager);
     // The camera is only used for the local half of /shake, so a missing field
@@ -561,15 +601,16 @@ bool resolveFields() {
 
 void installFullControlHooks() {
     ready = resolveFields() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
-            target(T_CHAT_MSG_RECEIVE).addr && target(T_PLAYER_KEY).addr &&
-            target(T_KICK_SEND).addr && target(T_ROOM_CLOSE_SEND).addr &&
-            target(T_EXPLOSION_PLAYER_SEND).addr && target(T_EXPLOSION_SHAKE_SEND).addr &&
-            target(T_HOST_KEY).addr;
+            target(T_INPUT_SEND).addr && target(T_CHAT_MSG_RECEIVE).addr &&
+            target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
+            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_PLAYER_SEND).addr &&
+            target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr;
     if (!ready) {
         LOGE("Full control fields missing; chat commands stay off");
         return;
     }
     LOGI("Full control fields OK");
     installHook(target(T_CHAT_SEND), reinterpret_cast<void*>(sendHook));
+    installHook(target(T_INPUT_SEND), reinterpret_cast<void*>(sendButtonHook));
     installHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(keyHook));
 }
