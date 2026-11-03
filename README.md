@@ -53,13 +53,12 @@ ShadowHook sudah ikut di dalam file itu, jadi tidak ada library tambahan yang pe
 
 ## Log
 
-Setiap sesi menulis file sendiri di `Android/data/<package>/files/`, dengan nama
-`bokumods-YYYYMMDD-HHMMSS.log` mengikuti waktu lokal saat file dibuka. Baris `Log file:` di awal
-log hanya menulis nama filenya, bukan path penuh. Package mengikuti game
-yang terpasang; APK asli memakai `com.pixticle.bokuboku`, salinan mod memakai
-`com.pixticle.bokuboku.mods`. Sesi lama tidak ditimpa dan tidak dihapus, jadi tiap kali game
-dijalankan akan ada satu file baru, dan file dengan waktu paling akhir adalah sesi terakhir.
-Kalau dua sesi terbuka pada detik yang sama, file kedua diberi akhiran `-2`.
+Setiap sesi menulis file sendiri di `Android/data/<package>/files/`, dengan nama `bokumods-1.log`,
+`bokumods-2.log`, dan seterusnya mengikuti urutan sesi. Baris `Log file:` di awal log hanya
+menulis nama filenya, bukan path penuh. Package mengikuti game yang terpasang; APK asli memakai
+`com.pixticle.bokuboku`, salinan mod memakai `com.pixticle.bokuboku.mods`. Sesi lama tidak
+ditimpa dan tidak dihapus, jadi tiap kali game dijalankan akan ada satu file baru, dan nomor
+paling besar adalah sesi terakhir.
 
 ## Catatan
 

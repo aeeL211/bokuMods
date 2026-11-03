@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <link.h>
@@ -23,9 +24,9 @@
 namespace {
 
 // Each session writes its own file in the app's external files dir, i.e.
-// Android/data/<package>/files/bokumods-YYYYMMDD-HHMMSS.log. The path comes from
-// Context.getExternalFilesDir() through UnityPlayer.currentActivity, so the
-// package name is never hardcoded and a renamed package still works.
+// Android/data/<package>/files/bokumods-1.log, bokumods-2.log and so on. The
+// path comes from Context.getExternalFilesDir() through UnityPlayer.currentActivity,
+// so the package name is never hardcoded and a renamed package still works.
 std::atomic<int> logFd{-1};
 
 // The activity, and with it the log dir, only exists a few seconds into the
@@ -164,17 +165,39 @@ bool legacyDir(char* out, size_t size) {
     return true;
 }
 
-// One file per session, named with the local open time. O_EXCL never touches an
-// earlier file; two sessions opened in the same second get a counter instead of
-// sharing a name.
+// A session file carries the number of the session, so the name stays short and
+// the highest number in the folder is always the newest one.
+int sessionNumber(const char* name) {
+    int value = 0;
+    int used = 0;
+    if (sscanf(name, "bokumods-%d.log%n", &value, &used) != 1)
+        return 0;
+    if (used <= 0 || name[used] != '\0' || value < 1)
+        return 0;
+    return value;
+}
+
+int lastSession(const char* dir) {
+    DIR* handle = opendir(dir);
+    if (!handle)
+        return 0;
+    int last = 0;
+    while (struct dirent* entry = readdir(handle)) {
+        int value = sessionNumber(entry->d_name);
+        if (value > last)
+            last = value;
+    }
+    closedir(handle);
+    return last;
+}
+
+// One file per session, numbered in the order the sessions start. O_EXCL never
+// touches an earlier file, and the number only grows, so a deleted file cannot
+// hand its number to a later session.
 int openNew(const char* dir, char* path, size_t pathSize, int* err) {
-    char stamp[32];
-    formatTime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S");
-    for (int i = 0; i < 100; i++) {
-        if (i == 0)
-            snprintf(path, pathSize, "%s/bokumods-%s.log", dir, stamp);
-        else
-            snprintf(path, pathSize, "%s/bokumods-%s-%d.log", dir, stamp, i);
+    int first = lastSession(dir) + 1;
+    for (int i = first; i < first + 100; i++) {
+        snprintf(path, pathSize, "%s/bokumods-%d.log", dir, i);
         int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
         if (fd >= 0)
             return fd;
