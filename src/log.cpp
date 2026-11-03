@@ -23,7 +23,7 @@
 namespace {
 
 // Each session writes its own file in the app's external files dir, i.e.
-// Android/data/<package>/files/YYYYMMDD-HHMMSS.log. The path comes from
+// Android/data/<package>/files/bokumods-YYYYMMDD-HHMMSS.log. The path comes from
 // Context.getExternalFilesDir() through UnityPlayer.currentActivity, so the
 // package name is never hardcoded and a renamed package still works.
 std::atomic<int> logFd{-1};
@@ -172,9 +172,9 @@ int openNew(const char* dir, char* path, size_t pathSize, int* err) {
     formatTime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S");
     for (int i = 0; i < 100; i++) {
         if (i == 0)
-            snprintf(path, pathSize, "%s/%s.log", dir, stamp);
+            snprintf(path, pathSize, "%s/bokumods-%s.log", dir, stamp);
         else
-            snprintf(path, pathSize, "%s/%s-%d.log", dir, stamp, i);
+            snprintf(path, pathSize, "%s/bokumods-%s-%d.log", dir, stamp, i);
         int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
         if (fd >= 0)
             return fd;
