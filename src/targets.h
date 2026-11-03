@@ -12,7 +12,6 @@ struct Target {
     void* addr;
     void* method;
     void* orig;
-    void* stub;
 };
 
 Target& target(TargetId id);

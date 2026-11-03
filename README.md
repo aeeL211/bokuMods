@@ -73,10 +73,10 @@ pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
 ## Catatan
 
 - Hanya `arm64-v8a`.
-- Mod memeriksa nama file, keutuhan isi file, proses se-UID, dan library yang ikut termuat.
-  Kalau ada yang tidak cocok, mod melepas semua hook dan game kembali ke perilaku vanilla;
-  proses game tidak dimatikan. Proses yang dianggap ramah adalah aplikasi game sendiri,
-  `bin.mt.plus`, `magiskd`, `su`, dan `adbd`, ditambah library sistem.
+- Mod memeriksa nama file dan keutuhan isi file sekali di awal. Kalau salah satu tidak cocok,
+  mod tidak memasang hook dan game berjalan seperti biasa. Tidak ada pemeriksaan proses atau
+  library saat game berjalan, jadi sesi yang sudah aktif tidak bisa kehilangan hook di tengah
+  permainan.
 - Skin tersimpan sebagai slot model game, yaitu
   `Android/data/<package>/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor kosong
   pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.

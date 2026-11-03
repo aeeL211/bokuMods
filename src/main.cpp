@@ -54,11 +54,6 @@ void* worker(void*) {
         return nullptr;
     }
 
-    if (!protectionCheck()) {
-        LOGE("Protection: environment rejected");
-        return nullptr;
-    }
-
     LOGI("Domain ready, scanning");
     il2cppApi().attach(dom);
     int found = scan();
@@ -85,7 +80,6 @@ void* worker(void*) {
     installSkinHooks();
     installSlotHooks();
     LOGI("Hooks installed: %d", installedHooks());
-    startProtectionWatchdog();
     loginToast();
     return nullptr;
 }

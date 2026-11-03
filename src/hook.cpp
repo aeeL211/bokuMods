@@ -1,20 +1,12 @@
 #include "hook.h"
 
-#include <pthread.h>
 #include <shadowhook.h>
 
 #include "log.h"
 
 namespace {
 
-struct Installed {
-    Target* target;
-    void* stub;
-};
-
-Installed installed[T_COUNT] = {};
 int installedCount = 0;
-pthread_mutex_t installedLock = PTHREAD_MUTEX_INITIALIZER;
 
 } // namespace
 
@@ -42,41 +34,8 @@ bool installHook(Target& t, void* replacement) {
         LOGE("Hook failed: %s.%s (error %d, %s)", t.cls, t.name, e, shadowhook_to_errmsg(e));
         return false;
     }
-
-    pthread_mutex_lock(&installedLock);
-    if (installedCount < T_COUNT) {
-        installed[installedCount].target = &t;
-        installed[installedCount].stub = stub;
-        installedCount++;
-    }
-    pthread_mutex_unlock(&installedLock);
-    t.stub = stub;
+    installedCount++;
     return true;
 }
 
-int installedHooks() {
-    pthread_mutex_lock(&installedLock);
-    int count = installedCount;
-    pthread_mutex_unlock(&installedLock);
-    return count;
-}
-
-void unhookAll() {
-    pthread_mutex_lock(&installedLock);
-    for (int i = installedCount - 1; i >= 0; i--) {
-        Installed& entry = installed[i];
-        if (!entry.stub)
-            continue;
-        shadowhook_unhook(entry.stub);
-        entry.stub = nullptr;
-        entry.target->stub = nullptr;
-        // A hook body that is still in flight returns early instead of calling
-        // a trampoline that no longer exists.
-        entry.target->orig = nullptr;
-    }
-    int count = installedCount;
-    installedCount = 0;
-    pthread_mutex_unlock(&installedLock);
-    if (count > 0)
-        LOGE("Protection triggered: removed %d hooks", count);
-}
+int installedHooks() { return installedCount; }

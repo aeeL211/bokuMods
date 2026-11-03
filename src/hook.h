@@ -9,7 +9,3 @@ bool installHook(Target& t, void* replacement);
 
 // Number of hooks that are currently installed.
 int installedHooks();
-
-// Removes every installed hook. Used when the protection watchdog decides the
-// process is no longer trusted, so the game falls back to vanilla behavior.
-void unhookAll();
