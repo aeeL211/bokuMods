@@ -57,12 +57,15 @@ void* mountState(void* self, int animal) {
 }
 
 // The facing direction the stock ground terminator passes to the jump start.
-int32_t facingDir(void* manager) { return readInt(readPtr(manager, physicsField), dirField); }
+int32_t facingDir(void* manager) {
+    return readInt(readPtr(manager, physicsField), dirField);
+}
 
 // Holding the interaction button keeps the mount jumping: the stock ground
 // terminator only asks the jump key, so answer for it once the stock call had
 // nothing else to do.
-template <int animal> bool groundHook(void* self, void* method) {
+template <int animal>
+bool groundHook(void* self, void* method) {
     auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(kAnimals[animal].ground).orig);
     if (!orig)
         return false;
@@ -142,7 +145,8 @@ bool resolveJumpFields() {
            resolveField(fieldClass(jumpField), "start", startField);
 }
 
-template <int animal> void installGroundHook() {
+template <int animal>
+void installGroundHook() {
     installHook(target(kAnimals[animal].ground), reinterpret_cast<void*>(groundHook<animal>));
 }
 
