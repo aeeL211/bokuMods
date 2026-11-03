@@ -160,8 +160,7 @@ int32_t addHook(void* self, int32_t id, void* method) {
 // its own copy of that method, so each keeps the hand change back and the piece
 // stays in hand for the next bite. Ice cream stays out on purpose: its treats end
 // the item by design.
-template <TargetId id>
-void eatEndHook(void* self, void* method) {
+template <TargetId id> void eatEndHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(id).orig);
     if (!orig)
         return;
@@ -170,8 +169,7 @@ void eatEndHook(void* self, void* method) {
     setKeepHand(false);
 }
 
-template <TargetId id>
-void installEatEnd(const char* label) {
+template <TargetId id> void installEatEnd(const char* label) {
     installHook(target(id), reinterpret_cast<void*>(eatEndHook<id>), label);
 }
 
