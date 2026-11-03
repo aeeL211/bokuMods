@@ -18,6 +18,7 @@ bool rowHook(void*, int, void*) { return true; }
 Field userSelectField = {};
 Field uidField = {};
 Field emailField = {};
+bool fillLogged = false;
 
 using SetFn = void (*)(void*, void*, void*, void*, bool, void*);
 using SetLocalFn = void (*)(void*, void*, void*, void*);
@@ -35,8 +36,13 @@ void fillEmail(void* userRef) {
         return;
 
     void* uid = readPtr(user, uidField);
-    if (uid && stringLength(uid) > 0)
-        setRef(user, emailField, uid);
+    if (!uid || stringLength(uid) == 0)
+        return;
+    setRef(user, emailField, uid);
+    if (!fillLogged) {
+        fillLogged = true;
+        LOGI("Email filled from account id");
+    }
 }
 
 void setHook(void* self, void* userRef, void* uid, void* docs, bool overwrite, void* method) {
