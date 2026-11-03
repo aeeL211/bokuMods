@@ -23,7 +23,7 @@
 namespace {
 
 // Each session writes its own file in the app's external files dir, i.e.
-// Android/data/<package>/files/bokumods-YYYYMMDD-HHMMSS.log. The path comes from
+// Android/data/<package>/files/YYYYMMDD-HHMMSS.log. The path comes from
 // Context.getExternalFilesDir() through UnityPlayer.currentActivity, so the
 // package name is never hardcoded and a renamed package still works.
 std::atomic<int> logFd{-1};
@@ -172,9 +172,9 @@ int openNew(const char* dir, char* path, size_t pathSize, int* err) {
     formatTime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S");
     for (int i = 0; i < 100; i++) {
         if (i == 0)
-            snprintf(path, pathSize, "%s/bokumods-%s.log", dir, stamp);
+            snprintf(path, pathSize, "%s/%s.log", dir, stamp);
         else
-            snprintf(path, pathSize, "%s/bokumods-%s-%d.log", dir, stamp, i);
+            snprintf(path, pathSize, "%s/%s-%d.log", dir, stamp, i);
         int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
         if (fd >= 0)
             return fd;
@@ -348,7 +348,11 @@ void logOpenFile() {
     int n = snprintf(line, sizeof(line), "[%s] INFO  Log start (%s)\n", clock, date);
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
-    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (new session%s)\n", clock, path,
+    // The dir is always Android/data/<package>/files, so the full path only
+    // repeats what the reader already knows and makes the line hard to scan.
+    const char* slash = strrchr(path, '/');
+    const char* name = slash ? slash + 1 : path;
+    n = snprintf(line, sizeof(line), "[%s] INFO  Log file: %s (new session%s)\n", clock, name,
                  fromActivity ? "" : ", package fallback");
     if (n > 0)
         write(fd, line, static_cast<size_t>(n));
