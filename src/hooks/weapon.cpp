@@ -19,7 +19,7 @@ Field stateField = {};
 Field comboField = {};
 Field rockField = {};
 Field chargeField = {};
-// The runtime charge counter is the 32-bit step count the blaster id lookup
+// The runtime charge counter is the 32-bit step count the buster id lookup
 // compares with the configured full step.
 Field stepField = {};
 Field inputField = {};
@@ -30,19 +30,19 @@ Field hhRockField = {};
 Field configChargeField = {};
 Field fullStepField = {};
 
-// A held button fires once per window. The stock gun and blaster both wait out
-// a long action timer, and the blaster can burn its shot interval before the
+// A held button fires once per window. The stock gun and buster both wait out
+// a long action timer, and the buster can burn its shot interval before the
 // end state starts, after which the held button stops firing.
 constexpr long long kGunCadenceMs = 80;
-constexpr long long kBlasterActionMs = 60;
-constexpr long long kBlasterCadenceMs = 100;
+constexpr long long kBusterActionMs = 60;
+constexpr long long kBusterCadenceMs = 100;
 
 // Every player runs the same state machine, so the cadence follows the player
 // manager. One shared clock would let a guest reset the local button edge.
 struct Cadence {
     void* manager;
     long long gunShotMs;
-    long long blasterShotMs;
+    long long busterShotMs;
     bool held;
 };
 constexpr int kCadenceCount = 32;
@@ -118,7 +118,7 @@ void stateUpdateHook(void* self, void* method) {
     bool held = buttonHeld(manager);
     if (held && !cadence.held) {
         cadence.gunShotMs = nowMs();
-        cadence.blasterShotMs = cadence.gunShotMs;
+        cadence.busterShotMs = cadence.gunShotMs;
     }
     cadence.held = held;
     orig(self, method);
@@ -158,8 +158,8 @@ void gunUpdateHook(void* self, void* method) {
     orig(self, method);
 }
 
-// The same sync during the blaster action.
-void blasterUpdateHook(void* self, void* method) {
+// The same sync during the buster action.
+void busterUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_UPDATE).orig);
     if (!orig)
         return;
@@ -168,10 +168,10 @@ void blasterUpdateHook(void* self, void* method) {
     orig(self, method);
 }
 
-// Every stance ends the blaster action through this check, which waits out a
+// Every stance ends the buster action through this check, which waits out a
 // long action timer. Ending it one action window after the shot starts keeps
 // the muzzle and effect frames while removing the rest of the wait.
-bool blasterActionEndHook(void* self, void* method) {
+bool busterActionEndHook(void* self, void* method) {
     auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_ACTION_END).orig);
     if (!orig)
         return false;
@@ -182,13 +182,13 @@ bool blasterActionEndHook(void* self, void* method) {
         return true;
     if (!buttonHeld(manager))
         return false;
-    return nowMs() - cadence.blasterShotMs >= kBlasterActionMs;
+    return nowMs() - cadence.busterShotMs >= kBusterActionMs;
 }
 
-// The moving stances leave the blaster end state through this check, which
+// The moving stances leave the buster end state through this check, which
 // gives up once the shot interval passed. Answering yes on the cadence keeps
 // the shot going for as long as the button is held.
-bool blasterEndToActionHook(void* self, void* method) {
+bool busterEndToActionHook(void* self, void* method) {
     auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_END_TO_ACTION).orig);
     if (!orig)
         return false;
@@ -197,18 +197,18 @@ bool blasterEndToActionHook(void* self, void* method) {
     Cadence& cadence = cadenceFor(manager);
     if (orig(self, method)) {
         if (buttonHeld(manager))
-            cadence.blasterShotMs = nowMs();
+            cadence.busterShotMs = nowMs();
         return true;
     }
     if (!buttonHeld(manager))
         return false;
-    return cadenceReady(cadence.blasterShotMs, kBlasterCadenceMs);
+    return cadenceReady(cadence.busterShotMs, kBusterCadenceMs);
 }
 
-// The standing blaster refires inside its own end update. Holding that update
+// The standing buster refires inside its own end update. Holding that update
 // until the cadence is due and then starting the action keeps the same rate,
 // and the stock path still runs whenever the button is released.
-void blasterEndUpdateHook(void* self, void* method) {
+void busterEndUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_END_UPDATE).orig);
     if (!orig)
         return;
@@ -223,7 +223,7 @@ void blasterEndUpdateHook(void* self, void* method) {
     }
 
     Cadence& cadence = cadenceFor(manager);
-    if (!cadenceReady(cadence.blasterShotMs, kBlasterCadenceMs))
+    if (!cadenceReady(cadence.busterShotMs, kBusterCadenceMs))
         return;
 
     action(self, endDir(cmn, nullptr), nullptr);
@@ -232,7 +232,7 @@ void blasterEndUpdateHook(void* self, void* method) {
 // The id lookup returns the charged projectile only when the runtime charge
 // step equals the configured full step. Writing that step before the lookup
 // makes every shot use the strongest ammo.
-int32_t blasterIdHook(void* self, void* method) {
+int32_t busterIdHook(void* self, void* method) {
     auto orig = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_ID).orig);
     if (!orig)
         return 0;
@@ -281,7 +281,7 @@ void installWeaponHooks() {
     LOGI("Weapon fields OK");
 
     if (!target(T_ROCK_ACTION).addr || !target(T_ROCK_END_DIR).addr)
-        LOGE("Blaster refire methods not found; standing blaster stays stock");
+        LOGE("Buster refire methods not found; standing buster stays stock");
 
     installHook(target(T_STATE_UPDATE), reinterpret_cast<void*>(stateUpdateHook),
                 "Player__State._Update");
@@ -291,14 +291,14 @@ void installWeaponHooks() {
                 "Cmn.Term__Gun_Shoot__Action__Update__End");
     installHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(gunUpdateHook),
                 "Weapon.Gun_Shoot__Action__Update");
-    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(blasterUpdateHook),
+    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(busterUpdateHook),
                 "Weapon.Rockman__Rock_Buster__Action__Update");
-    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(blasterActionEndHook),
+    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(busterActionEndHook),
                 "Cmn.Term__Rockman__Rock_Buster__Action__Update__End");
-    installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(blasterEndUpdateHook),
+    installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(busterEndUpdateHook),
                 "Weapon.Rockman__Rock_Buster__End__Update");
-    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(blasterEndToActionHook),
+    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(busterEndToActionHook),
                 "Cmn.Term__Rockman__Rock_Buster__End__To__Action");
-    installHook(target(T_ROCK_ID), reinterpret_cast<void*>(blasterIdHook),
+    installHook(target(T_ROCK_ID), reinterpret_cast<void*>(busterIdHook),
                 "Cmn.Rockman__Rock_Buster__Id");
 }
