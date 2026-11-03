@@ -24,6 +24,7 @@ enum TargetId {
     T_HELP_VERSION,
     T_PASSWORD_BUTTON,
     T_HH_CHANGE,
+    T_PLAYER_UPDATE,
     T_EAT_END_KNEEL,
     T_EAT_END_SIT_F,
     T_EAT_END_SIT_S,
