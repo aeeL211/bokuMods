@@ -10,16 +10,27 @@
 
 namespace {
 
-// The throw animation keeps its state alive for a few frames, so the held
-// button throws again as soon as this window is over.
+// The throw entry scales its speed with this, so the top of the range is the
+// strongest throw the piece can make.
+constexpr float kFullPower = 1.0f;
+
+// The stock throw charges while the button is down and only fires on release,
+// so a held button needs a trigger of its own. The window matches the pistol
+// and the buster repeats.
 constexpr long long kThrowCadenceMs = 180;
 
 Field managerField = {};
+Field managerStateField = {};
+Field managerThrowField = {};
+Field chargeField = {};
+Field chargeActiveField = {};
 
+// Every player throws from its own state object, so the cadence and the last
+// throw direction follow the player manager.
 struct Throw {
     void* manager;
-    int32_t state;
     long long lastMs;
+    bool up;
 };
 constexpr int kThrowCount = 32;
 Throw throws[kThrowCount] = {};
@@ -31,8 +42,6 @@ long long nowMs() {
     return static_cast<long long>(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
 }
 
-// Every player throws from its own state object, so the cadence follows the
-// manager the same way the weapon cadences do.
 Throw& throwFor(void* manager) {
     Throw* freeSlot = nullptr;
     for (Throw& t : throws) {
@@ -49,24 +58,71 @@ Throw& throwFor(void* manager) {
     return slot;
 }
 
-// The throw spawns its projectile and then asks for the empty hand id, which
-// takes the piece out of the player's hands. Keeping that hand change back
-// leaves the held piece in place, so the same piece can be thrown again.
-void throwActionHook(void* self, int32_t throwState, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_FECES_THROW).orig);
+// True at most once per window, so a held button throws at a fixed rate.
+bool cadenceReady(Throw& t) {
+    long long now = nowMs();
+    if (now - t.lastMs < kThrowCadenceMs)
+        return false;
+    t.lastMs = now;
+    return true;
+}
+
+// Records the direction of the throw that is starting and arms the cadence, so
+// the first repeat waits one window instead of landing on the stock throw.
+void markThrow(void* self, bool up) {
+    void* manager = readPtr(self, managerField);
+    if (!manager)
+        return;
+    Throw& t = throwFor(manager);
+    t.up = up;
+    t.lastMs = nowMs();
+}
+
+// The charge keeps the release handler armed, so it is dropped once the throw
+// already left the hand and the release would add a second one.
+void clearCharge(void* manager) {
+    void* state = readPtr(manager, managerStateField);
+    void* throwData = readPtr(state, managerThrowField);
+    void* charge = readPtr(throwData, chargeField);
+    if (charge)
+        writeBool(charge, chargeActiveField, false);
+}
+
+// The throw action ends on its own and leaves the throw state, so starting the
+// same entry the release uses puts the player back into it, direction included.
+void throwNow(void* self, bool up) {
+    void* entry = target(up ? T_FECES_ACTION_UP : T_FECES_ACTION_STD).addr;
+    if (entry)
+        reinterpret_cast<void (*)(void*, float, void*)>(entry)(self, kFullPower, nullptr);
+}
+
+// The empty hand id at the end of the throw takes the piece out of the hands.
+// Keeping that change back leaves the piece in place, so the same one can fly
+// again, and the power is forced so every throw is the strongest.
+void actionStdHook(void* self, float, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_STD).orig);
     if (!orig)
         return;
-    Throw& t = throwFor(readPtr(self, managerField));
-    t.state = throwState;
-    t.lastMs = nowMs();
+    markThrow(self, false);
     setKeepHand(true);
-    orig(self, throwState, method);
+    orig(self, kFullPower, method);
     setKeepHand(false);
 }
 
-// This update runs every frame the throw is on screen. Starting the action
-// again once the window passed throws the same piece again while the button is
-// held, the same way the pistol and buster repeat.
+// The look-up throw needs the same treatment.
+void actionUpHook(void* self, float, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_UP).orig);
+    if (!orig)
+        return;
+    markThrow(self, true);
+    setKeepHand(true);
+    orig(self, kFullPower, method);
+    setKeepHand(false);
+}
+
+// Runs every frame the throw action is on screen, and the stock path ends that
+// action once the sprite reaches its last step. Starting the throw after it
+// throws again while the button is held.
 void throwUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_UPDATE).orig);
     if (!orig)
@@ -77,26 +133,52 @@ void throwUpdateHook(void* self, void* method) {
     if (!manager || !actionHeld(manager))
         return;
     Throw& t = throwFor(manager);
-    if (nowMs() - t.lastMs < kThrowCadenceMs)
-        return;
-    t.lastMs = nowMs();
+    if (cadenceReady(t))
+        throwNow(self, t.up);
+}
 
-    auto action = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_FECES_THROW).addr);
-    if (action)
-        action(self, t.state, nullptr);
+// Runs every frame of the charge state. A held button throws at once instead of
+// waiting for the release, so the first throw of a hold lands like every repeat.
+void chargeUpdateHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UPDATE).orig);
+    if (!orig)
+        return;
+    orig(self, method);
+
+    void* manager = readPtr(self, managerField);
+    if (!manager || !actionHeld(manager))
+        return;
+    Throw& t = throwFor(manager);
+    if (!cadenceReady(t))
+        return;
+    clearCharge(manager);
+    throwNow(self, t.up);
+}
+
+bool resolveFecesFields() {
+    void* manager = classOf("Player__Manager");
+    return resolveField(classOf("Player__State__Std__Action__Hh__Nature"), "m", managerField) &&
+           resolveField(manager, "__state", managerStateField) &&
+           resolveField(fieldClass(managerStateField), "_throw", managerThrowField) &&
+           resolveField(fieldClass(managerThrowField), "charge", chargeField) &&
+           resolveField(fieldClass(chargeField), "active", chargeActiveField);
 }
 
 } // namespace
 
 void installFecesHooks() {
-    if (!resolveField(classOf("Player__State__Std__Action__Hh__Nature"), "m", managerField)) {
+    if (!resolveFecesFields()) {
         LOGE("Feces fields not found; the throw stays stock");
         return;
     }
     LOGI("Feces fields OK");
 
-    installHook(target(T_FECES_THROW), reinterpret_cast<void*>(throwActionHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action");
+    installHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(chargeUpdateHook),
+                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Update");
     installHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(throwUpdateHook),
                 "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Update");
+    installHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(actionStdHook),
+                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Std");
+    installHook(target(T_FECES_ACTION_UP), reinterpret_cast<void*>(actionUpHook),
+                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Up");
 }
