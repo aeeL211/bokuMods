@@ -12,34 +12,27 @@ namespace {
 void* tileClass = nullptr;
 Field tilesField = {};
 Field keyField = {};
-Field idField = {};
-// Resolved twin of the tile key match. Either may stay -1 when the game data
-// does not expose that variant; the key check alone still covers the rest.
-int32_t singleId = -1;
-int32_t pluralId = -1;
-bool idsLogged = false;
-// Every eat of a food tile passes through both hooks. The first few calls are
-// logged with the tile key so a plate that still vanishes can be traced to the
-// id that stopped matching.
+// Every eaten tile passes through both hooks. The first few calls are logged with
+// the tile key so a food that still vanishes can be traced to its id.
 int eatLogsLeft = 40;
 
-constexpr char kNeedle[] = "gingerbread";
-constexpr int32_t kNeedleLen = sizeof(kNeedle) - 1;
+constexpr char kIceCream[] = "ice_cream";
+constexpr char kPopsicle[] = "popsicle";
 
 char lowerAscii(uint16_t c) {
     return c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : static_cast<char>(c);
 }
 
-bool keyHasGingerbread(void* key) {
+bool keyHas(void* key, const char* needle, int32_t len) {
     const uint16_t* chars = stringChars(key);
-    int32_t len = stringLength(key);
-    if (!chars || len < kNeedleLen)
+    int32_t keyLen = stringLength(key);
+    if (!chars || keyLen < len)
         return false;
-    for (int32_t i = 0; i + kNeedleLen <= len; i++) {
+    for (int32_t i = 0; i + len <= keyLen; i++) {
         int32_t j = 0;
-        while (j < kNeedleLen && lowerAscii(chars[i + j]) == kNeedle[j])
+        while (j < len && lowerAscii(chars[i + j]) == needle[j])
             j++;
-        if (j == kNeedleLen)
+        if (j == len)
             return true;
     }
     return false;
@@ -59,68 +52,24 @@ void* tileEntry(int32_t id) {
     return *reinterpret_cast<void**>(arrayData(tiles) + id * static_cast<ptrdiff_t>(sizeof(void*)));
 }
 
-bool walkRefs(void*& obj, Field& f, const char* const* names, int count) {
-    for (int i = 0; i < count; i++) {
-        if (!resolveField(fieldClass(f), names[i], f))
-            return false;
-        obj = readPtr(obj, f);
-        if (!obj)
-            return false;
-    }
-    return true;
-}
-
-int32_t resolveVariant(const char* const* names, int count, const char* leaf) {
-    if (!tileClass || !idField.field)
-        return -1;
-    void* base = staticFieldData(tileClass);
-    if (!base)
-        return -1;
-    void* obj = readPtr(base, idField);
-    if (!obj)
-        return -1;
-    Field f = idField;
-    if (!walkRefs(obj, f, names, count))
-        return -1;
-    if (!resolveField(fieldClass(f), leaf, f))
-        return -1;
-    return readInt(obj, f);
-}
-
-// _Tile.id is filled when the game builds its table, which happens after the
-// hooks are installed, so the ids are looked up on first use instead of at
-// startup. -1 means "not readable yet", not "missing".
-void resolveIds() {
-    if ((singleId >= 0 && pluralId >= 0) || !tileClass || !idField.field)
-        return;
-    static const char* const kSingle[] = {"christmas", "gingerbread_Man", "std"};
-    static const char* const kPlural[] = {"christmas", "gingerbread_Man", "plate", "blk"};
-    if (singleId < 0)
-        singleId = resolveVariant(kSingle, 3, "single");
-    if (pluralId < 0)
-        pluralId = resolveVariant(kPlural, 4, "plural");
-    if (!idsLogged && (singleId >= 0 || pluralId >= 0)) {
-        idsLogged = true;
-        LOGI("Gingerbread ids: single=%d plural=%d", singleId, pluralId);
-    }
-}
-
-bool isGingerbread(int32_t id) {
-    if (id < 0)
-        return false;
-    resolveIds();
-    if (id == singleId || id == pluralId)
-        return true;
+void* tileKey(int32_t id) {
     void* entry = tileEntry(id);
-    return entry && keyHasGingerbread(readPtr(entry, keyField));
+    return entry ? readPtr(entry, keyField) : nullptr;
+}
+
+// Ice cream and the popsicle keep their vanilla one-bite end: their treats are
+// meant to run out.
+bool isIceCream(int32_t id) {
+    void* key = tileKey(id);
+    return keyHas(key, kIceCream, sizeof(kIceCream) - 1) ||
+           keyHas(key, kPopsicle, sizeof(kPopsicle) - 1);
 }
 
 void logEat(const char* kind, int32_t id, bool keep) {
     if (eatLogsLeft <= 0)
         return;
     eatLogsLeft--;
-    void* entry = tileEntry(id);
-    void* key = entry ? readPtr(entry, keyField) : nullptr;
+    void* key = tileKey(id);
     const uint16_t* chars = stringChars(key);
     int32_t len = stringLength(key);
     char text[52] = {};
@@ -134,11 +83,14 @@ void logEat(const char* kind, int32_t id, bool keep) {
     LOGI("Eat %s: id=%d keep=%d key=%s", kind, id, keep ? 1 : 0, text);
 }
 
-// Gingerbread is a Christmas tile the tile converter does not know, so the eat
-// path deletes the plate instead of changing it. Claim the id and re-record the
-// tile as itself, which keeps the plate on the map for the next bite.
+// The eat path asks this hook whether the bitten tile has a follow-up tile, then
+// asks the next hook for the id to record. Claiming the id and returning it
+// unchanged records the same dish again, so the same food can be eaten as often
+// as wanted. Foods the converter does not list, which is every festive dish and
+// every dish the game data adds later, otherwise fall through to the delete
+// branch and are gone after one bite.
 bool termHook(void* self, int32_t id, void* method) {
-    bool keep = isGingerbread(id);
+    bool keep = !isIceCream(id);
     logEat("term", id, keep);
     if (keep)
         return true;
@@ -147,7 +99,7 @@ bool termHook(void* self, int32_t id, void* method) {
 }
 
 int32_t addHook(void* self, int32_t id, void* method) {
-    bool keep = isGingerbread(id);
+    bool keep = !isIceCream(id);
     logEat("add", id, keep);
     if (keep)
         return id;
@@ -196,7 +148,7 @@ void installFoodHooks() {
         LOGE("Tile table not found; tile eat hooks disabled");
         return;
     }
-    resolveField(tileClass, "id", idField);
+    LOGI("Tile table OK");
 
     installHook(target(T_EAT_CHANGE_TERM), reinterpret_cast<void*>(termHook),
                 "Converter__Tile__Type.Term__Eat__Tile__Change");
