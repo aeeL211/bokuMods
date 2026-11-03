@@ -84,6 +84,7 @@ add_library(febrian SHARED
   src/il2cpp_api.cpp
   src/targets.cpp
   # hook groups
+  src/hooks/action_input.cpp
   src/hooks/iap.cpp
   src/hooks/multiplayer.cpp
   src/hooks/chat.cpp

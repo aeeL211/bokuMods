@@ -20,6 +20,10 @@ void installFecesHooks();
 void installHandHooks();
 void installSlotHooks();
 
+// True while the interaction button is held for this player.
+bool actionHeld(void* manager);
+void resolveActionInput();
+
 // Raised by a feature that keeps its item in hand while the stock call would
 // clear the hand slot.
 void setKeepHand(bool keep);

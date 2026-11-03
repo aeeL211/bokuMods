@@ -63,6 +63,7 @@ void* worker(void*) {
     installFoodHooks();
     installPrivacyHooks();
     installAccountHooks();
+    resolveActionInput();
     installWeaponHooks();
     installEffectHooks();
     installKnockbackHooks();

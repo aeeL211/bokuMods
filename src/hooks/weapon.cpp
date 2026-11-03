@@ -22,10 +22,6 @@ Field chargeField = {};
 // The runtime charge counter is the 32-bit step count the buster id lookup
 // compares with the configured full step.
 Field stepField = {};
-Field inputField = {};
-Field inputManagerField = {};
-Field actionField = {};
-Field keepField = {};
 Field hhRockField = {};
 Field configChargeField = {};
 Field fullStepField = {};
@@ -85,25 +81,13 @@ void* playerState(void* self, const Field& managerField) {
     return readPtr(manager, stateField);
 }
 
-void* actionOf(void* manager) {
-    void* input = readPtr(manager, inputField);
-    void* inputManager = readPtr(input, inputManagerField);
-    return readPtr(inputManager, actionField);
-}
-
-// The interaction button is held when the action input keeps it.
-bool buttonHeld(void* manager) {
-    void* action = actionOf(manager);
-    return action && readBool(action, keepField);
-}
-
 // The state update repeats a shot only while its combo flag is set, and the
 // flag follows the held button. Writing it before the stock update lets every
 // stance repeat, standing or moving.
 void syncCombo(void* manager) {
     void* state = readPtr(manager, stateField);
     if (state)
-        writeBool(state, comboField, buttonHeld(manager));
+        writeBool(state, comboField, actionHeld(manager));
 }
 
 // The button press starts the stock shot, so the cadence counts from here and
@@ -115,7 +99,7 @@ void stateUpdateHook(void* self, void* method) {
 
     void* manager = readPtr(self, stateManagerField);
     Cadence& cadence = cadenceFor(manager);
-    bool held = buttonHeld(manager);
+    bool held = actionHeld(manager);
     if (held && !cadence.held) {
         cadence.gunShotMs = nowMs();
         cadence.busterShotMs = cadence.gunShotMs;
@@ -139,11 +123,11 @@ bool gunActionEndHook(void* self, int img, void* method) {
     void* manager = readPtr(self, cmnManagerField);
     Cadence& cadence = cadenceFor(manager);
     if (orig(self, img, method)) {
-        if (buttonHeld(manager))
+        if (actionHeld(manager))
             cadence.gunShotMs = nowMs();
         return true;
     }
-    if (!buttonHeld(manager))
+    if (!actionHeld(manager))
         return false;
     return cadenceReady(cadence.gunShotMs, kGunCadenceMs);
 }
@@ -180,7 +164,7 @@ bool busterActionEndHook(void* self, void* method) {
     Cadence& cadence = cadenceFor(manager);
     if (orig(self, method))
         return true;
-    if (!buttonHeld(manager))
+    if (!actionHeld(manager))
         return false;
     return nowMs() - cadence.busterShotMs >= kBusterActionMs;
 }
@@ -196,11 +180,11 @@ bool busterEndToActionHook(void* self, void* method) {
     void* manager = readPtr(self, cmnManagerField);
     Cadence& cadence = cadenceFor(manager);
     if (orig(self, method)) {
-        if (buttonHeld(manager))
+        if (actionHeld(manager))
             cadence.busterShotMs = nowMs();
         return true;
     }
-    if (!buttonHeld(manager))
+    if (!actionHeld(manager))
         return false;
     return cadenceReady(cadence.busterShotMs, kBusterCadenceMs);
 }
@@ -217,7 +201,7 @@ void busterEndUpdateHook(void* self, void* method) {
     auto action = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_ROCK_ACTION).addr);
     void* manager = readPtr(self, weaponManagerField);
     void* cmn = readPtr(self, weaponCmnField);
-    if (!endDir || !action || !cmn || !buttonHeld(manager)) {
+    if (!endDir || !action || !cmn || !actionHeld(manager)) {
         orig(self, method);
         return;
     }
@@ -262,10 +246,6 @@ bool resolveWeaponFields() {
            resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) &&
            resolveField(fieldClass(rockField), "charge", chargeField) &&
            resolveField(fieldClass(chargeField), "step", stepField) &&
-           resolveField(fieldClass(weaponManagerField), "input", inputField) &&
-           resolveField(fieldClass(inputField), "input", inputManagerField) &&
-           resolveField(fieldClass(inputManagerField), "action", actionField) &&
-           resolveField(fieldClass(actionField), "keep", keepField) &&
            resolveField(fieldClass(cmnHhField), "_rockman__Rock_Buster", hhRockField) &&
            resolveField(fieldClass(hhRockField), "charge", configChargeField) &&
            resolveField(fieldClass(configChargeField), "step__Full", fullStepField);
