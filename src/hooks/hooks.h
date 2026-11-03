@@ -27,3 +27,7 @@ void resolveActionInput();
 // Raised by a feature that keeps its item in hand while the stock call would
 // clear the hand slot.
 void setKeepHand(bool keep);
+
+// Puts the last held id back into the hand after an eat animation hid the
+// sprite, so the kept food stays visible.
+void refreshHand();

@@ -11,6 +11,9 @@ namespace {
 // stays in hand for the next bite. Ice cream stays out on purpose: its treats
 // end the item by design.
 //
+// The eat animation hides the held sprite right after that hand change, so the
+// hand is re-applied once the original returns. Without it the food is still in
+// hand but invisible until the player moves and the state refresh rebuilds it.
 template <TargetId id> void eatEndHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(id).orig);
     if (!orig)
@@ -18,6 +21,7 @@ template <TargetId id> void eatEndHook(void* self, void* method) {
     setKeepHand(true);
     orig(self, method);
     setKeepHand(false);
+    refreshHand();
 }
 
 template <TargetId id> void installEatEnd(const char* label) {
