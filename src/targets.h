@@ -70,6 +70,7 @@ enum TargetId {
     T_TUMBLE_EXPLODE,
     T_FECES_DISAPPEAR,
     T_FECES_REMOVE,
+    T_FECES_THROW,
     T_COUNT,
 };
 

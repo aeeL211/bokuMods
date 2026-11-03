@@ -59,6 +59,7 @@ void* worker(void*) {
     installPasswordHooks();
     installSkinRangeHooks();
     installAboutHooks();
+    installHandHooks();
     installFoodHooks();
     installPrivacyHooks();
     installAccountHooks();

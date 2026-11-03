@@ -17,4 +17,9 @@ void installWeaponHooks();
 void installEffectHooks();
 void installKnockbackHooks();
 void installFecesHooks();
+void installHandHooks();
 void installSlotHooks();
+
+// Raised by a feature that keeps its item in hand while the stock call would
+// clear the hand slot.
+void setKeepHand(bool keep);
