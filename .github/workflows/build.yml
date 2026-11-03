@@ -197,8 +197,11 @@ jobs:
           [ -f "$SO" ] || { echo "::error::libfebrian.so was not produced"; exit 1; }
           echo "== $(basename "$SO")"
           "$RE" -h "$SO" | grep -E "Class:|Machine:"
-          "$RE" -h "$SO" | grep -Eq "Class: +ELF64$"   || { echo "::error::wrong ELF class"; exit 1; }
-          "$RE" -h "$SO" | grep -Eq "Machine: +AArch64$" || { echo "::error::wrong machine"; exit 1; }
+          # Newer llvm-readelf pads the column, so trailing blanks are allowed.
+          "$RE" -h "$SO" | grep -Eq "Class:[[:space:]]+ELF64[[:space:]]*$" \
+            || { echo "::error::wrong ELF class"; exit 1; }
+          "$RE" -h "$SO" | grep -Eq "Machine:[[:space:]]+AArch64[[:space:]]*$" \
+            || { echo "::error::wrong machine"; exit 1; }
           "$RE" -d "$SO" | grep -E "NEEDED|SONAME" || true
 
           # Static linking is the point: the shared ShadowHook must be gone.
