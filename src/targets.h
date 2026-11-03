@@ -69,6 +69,8 @@ enum TargetId {
     T_USER_SET_LOCAL,
     T_USER_SET_LOCAL_ARRAY,
     T_USER_SET_LOCAL_LIST,
+    T_GUEST_NAME,
+    T_DATA_MODEL_NAME,
     T_COUNT,
 };
 

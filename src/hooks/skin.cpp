@@ -21,6 +21,8 @@ constexpr size_t kMaxModelBytes = static_cast<size_t>(kMaxModelChars) * 3 + 1;
 constexpr int kMaxHashes = 512;
 constexpr int kMaxSlot = 1000;
 constexpr size_t kMaxPathBytes = 1024;
+// A user id is short; a longer one is not worth a map entry.
+constexpr size_t kMaxUserBytes = 64;
 
 char modelText[kMaxModelBytes];
 char pathText[kMaxPathBytes];
@@ -30,6 +32,16 @@ uint64_t modelHashes[kMaxHashes];
 int modelHashCount = 0;
 int nextSlot = 1;
 bool slotReady = false;
+
+// A saved slot and the user it came from, so the display name that arrives
+// later can be written next to the model it belongs to.
+struct UserSlot {
+    char user[kMaxUserBytes];
+    int slot;
+};
+
+UserSlot userSlots[kMaxHashes];
+int userSlotCount = 0;
 
 Field guestA = {};
 Field managerData = {};
@@ -91,6 +103,15 @@ void writeSlot(void* model, int slot, void* text) {
         fn(model, slot, text, target(T_DATA_MODEL_WRITE).method);
 }
 
+// The game writes the display name of its own models the same way, so the slot
+// gets the usual Name.txt next to Data.txt.
+void writeNameSlot(void* model, int slot, void* text) {
+    auto fn =
+        reinterpret_cast<void (*)(void*, int32_t, void*, void*)>(target(T_DATA_MODEL_NAME).addr);
+    if (fn)
+        fn(model, slot, text, target(T_DATA_MODEL_NAME).method);
+}
+
 // A skin from an earlier session already owns its slot, so the hash of every
 // Data.txt on disk is loaded once and the next write continues after them.
 bool readSlot(void* model, int slot) {
@@ -115,20 +136,21 @@ void seedSlots(void* model) {
 }
 
 // Every guest arrives with the string the game itself stores in Data.txt, so
-// one copy per distinct skin goes into the first free model slot.
-void saveModel(void* guestManager, void* modelStr) {
+// one copy per distinct skin goes into the first free model slot. The slot is
+// returned so the name can be attached once the profile arrives.
+int saveModel(void* guestManager, void* modelStr) {
     if (!fieldsReady || !modelStr)
-        return;
+        return 0;
     void* model = dataModel(guestManager);
     if (!model) {
         if (fieldsReady && !notReadyLogged) {
             notReadyLogged = true;
             LOGE("Skin model not ready, skins from this point are skipped");
         }
-        return;
+        return 0;
     }
     if (!toUtf8(modelStr, modelText, sizeof(modelText)))
-        return;
+        return 0;
 
     if (!slotReady) {
         slotReady = true;
@@ -136,20 +158,47 @@ void saveModel(void* guestManager, void* modelStr) {
     }
     uint64_t hash = hashText(modelText, strlen(modelText));
     if (seenHash(hash))
-        return;
+        return 0;
     if (nextSlot > kMaxSlot) {
         LOGE("Skin slots full, %d skins kept", modelHashCount);
-        return;
+        return 0;
     }
 
     writeSlot(model, nextSlot, modelStr);
     if (!slotExists(model, nextSlot)) {
         LOGE("Skin write failed: slot %d", nextSlot);
-        return;
+        return 0;
     }
     rememberHash(hash);
     LOGI("Skin saved: slot %d (%zu bytes)", nextSlot, strlen(modelText));
-    nextSlot++;
+    return nextSlot++;
+}
+
+void rememberUser(void* user, int slot) {
+    char text[kMaxUserBytes];
+    if (userSlotCount >= kMaxHashes || !toUtf8(user, text, sizeof(text)))
+        return;
+    memcpy(userSlots[userSlotCount].user, text, strlen(text) + 1);
+    userSlots[userSlotCount].slot = slot;
+    userSlotCount++;
+}
+
+// The guest carries the profile name only after the join handshake, so the name
+// is written here, to every slot that user's models were saved under.
+void writeUserName(void* guestManager, void* user, void* name) {
+    char text[kMaxUserBytes];
+    if (!fieldsReady || !name || stringLength(name) == 0 || !toUtf8(user, text, sizeof(text)))
+        return;
+    void* model = dataModel(guestManager);
+    if (!model)
+        return;
+
+    for (int i = 0; i < userSlotCount; i++) {
+        if (strcmp(userSlots[i].user, text))
+            continue;
+        writeNameSlot(model, userSlots[i].slot, name);
+        LOGI("Skin name: slot %d", userSlots[i].slot);
+    }
 }
 
 using AddFn = void (*)(void*, void*, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, void*,
@@ -161,12 +210,25 @@ void addHook(void* self, void* user, int32_t z, int32_t x, int32_t y, int32_t di
              int32_t obj, void* key, void* dollName, void* parent, void* model, void* ping,
              bool build, bool detonate, bool saveWorld, bool dollInteract, bool dollMove,
              bool dollSetting, void* method) {
-    saveModel(self, model);
+    int slot = saveModel(self, model);
+    if (slot)
+        rememberUser(user, slot);
 
     auto orig = reinterpret_cast<AddFn>(target(T_GUEST_ADD).orig);
     if (orig)
         orig(self, user, z, x, y, dir, s, obj, key, dollName, parent, model, ping, build, detonate,
              saveWorld, dollInteract, dollMove, dollSetting, method);
+}
+
+using NameFn = void (*)(void*, void*, void*, void*);
+
+// The profile arrives after the join, so the display name is written to the
+// slots that guest's models were saved under.
+void nameHook(void* self, void* user, void* name, void* method) {
+    auto orig = reinterpret_cast<NameFn>(target(T_GUEST_NAME).orig);
+    if (orig)
+        orig(self, user, name, method);
+    writeUserName(self, user, name);
 }
 
 } // namespace
@@ -183,4 +245,6 @@ void installSkinHooks() {
     LOGI("Skin model fields %s", fieldsReady ? "OK" : "missing, skins stay untouched");
 
     installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook), "Guest__Manager.Add");
+    installHook(target(T_GUEST_NAME), reinterpret_cast<void*>(nameHook),
+                "Guest__Manager.Account__User_Name");
 }

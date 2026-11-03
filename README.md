@@ -19,7 +19,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Gingerbread cepat habis** — kue tetap di tangan setelah 3 gigitan.
 - **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
   kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
-  di daftar model dan bisa dipakai.
+  di daftar model dan bisa dipakai. Nama pemain asalnya ikut ditulis ke slot itu, jadi skin
+  siapa pun bisa dikenali.
 - **Room besar tidak muncul** — batas ukuran world milik perangkat ini diabaikan, jadi room
   berukuran besar tetap tampil di daftar dan bisa dimasuki.
 - **Pesan pribadi pemain lain tidak terbaca** — isi DM antar pemain di room ikut tampil di chat
@@ -65,7 +66,9 @@ Kalau dua sesi terbuka pada detik yang sama, file kedua diberi akhiran `-2`.
   `Android/data/<package>/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor kosong
   pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.
   Slot yang sudah ada dibaca sekali di awal, jadi skin yang sudah pernah tersimpan tidak
-  diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai.
+  diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai. Nama pemain asalnya
+  ditulis ke `Name.txt` di folder slot yang sama begitu profil pemain itu diterima game; kalau
+  profilnya tidak pernah datang, slot tetap tersimpan tanpa nama.
 - Kemampuan host seperti kick, izin pemain, dan pengaturan room diperiksa di sisi server, jadi
   tidak dimodifikasi dan tetap mengikuti aturan room.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
