@@ -8,6 +8,9 @@ void logPrint(char level, const char* fmt, ...);
 void logOpenFile();
 void installCrashLog();
 
+// Full path of the file this session writes, or nullptr before it is open.
+const char* logFilePath();
+
 #define LOGI(...) logPrint('I', __VA_ARGS__)
 #define LOGE(...) logPrint('E', __VA_ARGS__)
 
@@ -15,6 +18,7 @@ void installCrashLog();
 
 inline void logOpenFile() {}
 inline void installCrashLog() {}
+inline const char* logFilePath() { return nullptr; }
 
 #define LOGI(...) ((void)0)
 #define LOGE(...) ((void)0)

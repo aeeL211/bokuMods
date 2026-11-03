@@ -51,6 +51,37 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Kata kasar disensor** — semua pengecekan kata terlarang dilewati, jadi chat, nama, dan teks
   profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
+- **Kontrol room lewat chat** — perintah chat menjalankan aksi tingkat host: kick, tutup room,
+  getar kamera, dan ledakan. Baris perintah tidak pernah dikirim ke pemain lain.
+
+## Perintah chat
+
+Ketik perintah di kotak chat room. Baris perintah tidak pernah sampai ke pemain lain: jawabannya
+hanya muncul di chat room perangkat sendiri, dan kotak chat langsung dikosongkan. Teks yang
+diawali `/` tapi bukan perintah yang dikenal tetap terkirim sebagai chat biasa.
+
+Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain menyusul `#2`,
+`#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain
+masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
+
+| Perintah | Halaman | Fungsi |
+|---|---|---|
+| `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
+| `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
+| `/kickall` | 1 | keluarkan semua pemain lain |
+| `/close` | 1 | tutup room, tanpa konfirmasi |
+| `/shake` | 2 | getarkan kamera semua pemain |
+| `/explode <n>` | 2 | ledakan di posisi pemain nomor n |
+| `/boom <x> <y> [zone]` | 2 | ledakan di titik world x,y; zone default mengikuti tamu pertama |
+| `/status` | 3 | key sendiri, key host, status master, jumlah pemain |
+| `/log` | 3 | path file log sesi ini |
+| `/help <perintah>` | 3 | penjelasan satu perintah |
+| `/menu [1-3]` | 3 | daftar perintah per halaman |
+
+`/menu` tanpa angka menampilkan halaman 1: kontrol room di halaman 1, efek di halaman 2, dan
+utilitas di halaman 3. Paket kick, tutup room, getaran, dan ledakan dikirim memakai key host
+room, jadi klien lain menerimanya sebagai perintah dari host. Perintah hanya berlaku di room
+yang sedang dimasuki, dan tamu yang tidak punya izin host tetap bisa memakainya.
 
 ## Pemasangan
 
@@ -84,8 +115,9 @@ pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
   diduplikasi. Slot tanpa gambar pratinjau tetap bisa dibuka dan dipakai. Nama pemain asalnya
   ditulis ke `Name.txt` di folder slot yang sama begitu profil pemain itu diterima game; kalau
   profilnya tidak pernah datang, slot tetap tersimpan tanpa nama.
-- Kemampuan host seperti kick, izin pemain, dan pengaturan room diperiksa di sisi server, jadi
-  tidak dimodifikasi dan tetap mengikuti aturan room.
+- Izin build dan destroy tetap ditentukan host room, jadi tamu tidak bisa mengubah tile di luar
+  izin itu. Yang dikirim mod hanya paket kick, tutup room, getaran, dan ledakan lewat perintah
+  chat, memakai key host room sebagai pengirim.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.

@@ -79,6 +79,7 @@ void* worker(void*) {
     installFecesHooks();
     installSkinHooks();
     installSlotHooks();
+    installFullControlHooks();
     LOGI("Hooks installed: %d", installedHooks());
     loginToast();
     return nullptr;

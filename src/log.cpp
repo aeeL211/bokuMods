@@ -29,6 +29,9 @@ namespace {
 // so the package name is never hardcoded and a renamed package still works.
 std::atomic<int> logFd{-1};
 
+// The path of the file this session opened, kept so a command can print it.
+char sessionPath[600] = {};
+
 // The activity, and with it the log dir, only exists a few seconds into the
 // process. Lines from that window are kept here and flushed when the file
 // finally opens, so the start of a session is not lost.
@@ -338,6 +341,8 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
 
 } // namespace
 
+const char* logFilePath() { return sessionPath[0] ? sessionPath : nullptr; }
+
 void logOpenFile() {
     if (logFd >= 0)
         return;
@@ -362,6 +367,7 @@ void logOpenFile() {
     if (fd < 0)
         return;
     logFd = fd;
+    snprintf(sessionPath, sizeof(sessionPath), "%s", path);
 
     char clock[16];
     char date[16];
