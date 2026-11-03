@@ -86,6 +86,8 @@ Target targets[T_COUNT] = {
     {"Player__State__Std__Air", "Tumble__Explode", 3, nullptr, nullptr, nullptr},
     {"Player__State__Std__Action__Hh__Nature", "Feces__Throw__Action", 1, nullptr, nullptr,
      nullptr},
+    {"Player__State__Std__Action__Hh__Nature", "Feces__Throw__Action__Update", 0, nullptr, nullptr,
+     nullptr},
     {"Net__Account__Manager", "User__Set", 4, nullptr, nullptr, nullptr},
     {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "String"},
     {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "String[]"},

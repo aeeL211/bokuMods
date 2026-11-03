@@ -35,7 +35,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Terpental saat ledakan** — ledakan tidak lagi membuat pemain terpental dan jatuh; tile dan
   efek ledakan tetap berjalan.
 - **Feces hilang setelah dilempar** — feces coklat, hijau, dan pink tetap di tangan setelah
-  dilempar, jadi bisa dilempar berkali-kali.
+  dilempar, dan otomatis terlempar lagi selama tombol interaksi ditahan, sama seperti pistol dan
+  buster, jadi bisa dilempar berkali-kali.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat. Email pemain lain hanya ikut terkirim kalau pemain itu sendiri
   menyalakan opsi tampilkan email, jadi baris email di daftar teman, tambah teman, verifikasi,
