@@ -15,7 +15,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Host tidak mengizinkan save world** — save tetap bisa dilakukan.
 - **Room ber-password** — bisa dimasuki tanpa mengetik password.
 - **Posisi skin sempit** — slider X/Y diperlebar ke -25..25.
-- **Gingerbread cepat habis** — kue tetap di tangan setelah 3 gigitan.
+- **Makanan cepat habis** — sushi, hot cross bun, dan gingerbread tetap di tangan setelah
+  beberapa gigitan, jadi bisa dimakan sebanyak yang diinginkan. Es krim sengaja dibiarkan habis
+  seperti biasa.
 - **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
   kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
   di daftar model dan bisa dipakai. Nama pemain asalnya ikut ditulis ke slot itu, jadi skin
