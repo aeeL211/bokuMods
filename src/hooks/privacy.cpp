@@ -69,8 +69,7 @@ void fillEmail(void* owner, const EmailFields& f) {
 bool resolveEmailFields(EmailFields& f, void* klass) {
     if (!klass)
         return false;
-    return resolveField(klass, "email", f.email) &&
-           resolveField(klass, "privacy", f.privacy) &&
+    return resolveField(klass, "email", f.email) && resolveField(klass, "privacy", f.privacy) &&
            resolveField(fieldClass(f.privacy), "email", f.privacyEmail) &&
            resolveField(fieldClass(f.privacyEmail), "visible", f.visible);
 }
