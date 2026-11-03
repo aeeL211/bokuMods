@@ -8,8 +8,7 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **IAP berbayar** — pembelian disimulasikan, tidak perlu Play Billing.
 - **Konten terkunci** — semua tile, model, dan melody langsung terbuka.
 - **Slot penyimpanan terbatas** — jumlah slot model, wajah, portrait, foto, dunia, dan koleksi
-  lain langsung dibuka sampai batas tertinggi game (9999), jadi tidak perlu membelinya satu per
-  satu.
+  lain langsung dibuka tanpa batas (`INT32_MAX`), jadi tidak perlu membelinya satu per satu.
 - **Nama profil terpotong** — batas input nama dinaikkan.
 - **Tanggal lahir dibatasi** — hari, bulan, dan tahun tidak lagi dipotong.
 - **Teks perkenalan terpotong** — batas panjang perkenalan dinaikkan.

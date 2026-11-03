@@ -9,9 +9,9 @@
 
 namespace {
 
-// The shipped limit is the fallback for a build whose limit object cannot be
-// read, so the loader still opens every slot.
-constexpr int32_t kFallbackMax = 9999;
+// The game ships 9999 slots per storage type. INT32_MAX makes every store
+// unlimited, which is what the mod offers instead of buying slots one by one.
+constexpr int32_t kSlotCap = INT32_MAX;
 
 // Every storage type is a Global field, maybe one level down, whose class
 // carries the data_Slot_Num counter the loader fills on startup.
@@ -34,8 +34,6 @@ Slot slots[] = {
     {"_block", "list", {}, {}, {}},       {"_jukebox", "library", {}, {}, {}},
     {"_jukebox", "playlist", {}, {}, {}},
 };
-
-int32_t slotMax = 0;
 
 bool resolveSlot(Slot& slot) {
     void* globalClass = classOf("Global");
@@ -60,33 +58,13 @@ void raiseSlot(void* base, const Slot& slot) {
     void* holder = readPtr(base, slot.firstField);
     if (slot.second)
         holder = readPtr(holder, slot.secondField);
-    if (holder && readInt(holder, slot.countField) < slotMax)
-        writeInt(holder, slot.countField, slotMax);
-}
-
-int32_t slotCap(void* base) {
-    void* globalClass = classOf("Global");
-    Field dataField = {};
-    Field slotField = {};
-    Field maxField = {};
-    if (!resolveField(globalClass, "_data", dataField))
-        return kFallbackMax;
-
-    void* data = readPtr(base, dataField);
-    if (!data || !resolveField(fieldClass(dataField), "slot_Num", slotField))
-        return kFallbackMax;
-
-    void* slotNum = readPtr(data, slotField);
-    if (!slotNum || !resolveField(fieldClass(slotField), "max", maxField))
-        return kFallbackMax;
-
-    int32_t max = readInt(slotNum, maxField);
-    return max > 0 ? max : kFallbackMax;
+    if (holder && readInt(holder, slot.countField) < kSlotCap)
+        writeInt(holder, slot.countField, kSlotCap);
 }
 
 // Every storage type loads its owned slot count through this one function.
-// Raising the count to the build's top slot number opens the whole store
-// without buying the slots one by one.
+// Raising the count to the cap opens the whole store without buying the slots
+// one by one.
 void loadHook(int32_t* count, void* key, int32_t standalone, void* method) {
     auto orig =
         reinterpret_cast<void (*)(int32_t*, void*, int32_t, void*)>(target(T_SLOT_LOAD).orig);
@@ -94,20 +72,14 @@ void loadHook(int32_t* count, void* key, int32_t standalone, void* method) {
         return;
 
     orig(count, key, standalone, method);
-    if (count && *count < slotMax)
-        *count = slotMax;
+    if (count && *count < kSlotCap)
+        *count = kSlotCap;
 }
 
 } // namespace
 
 void installSlotHooks() {
     void* base = staticFieldData(classOf("Global"));
-    if (base) {
-        slotMax = slotCap(base);
-    } else {
-        slotMax = kFallbackMax;
-        LOGE("Global fields not found; using fallback slot cap %d", slotMax);
-    }
 
     int ready = 0;
     for (Slot& slot : slots) {
@@ -127,7 +99,7 @@ void installSlotHooks() {
         LOGI("Slot fields OK");
     else
         LOGE("Slot fields: %d of %d found", ready, count);
-    LOGI("Slot cap %d", slotMax);
+    LOGI("Slot cap %d", kSlotCap);
 
     installHook(target(T_SLOT_LOAD), reinterpret_cast<void*>(loadHook),
                 "Global.Data__Load__Data_Slot_Num_");
