@@ -155,7 +155,10 @@ jobs:
             -DANDROID_PLATFORM=android-24 \
             -DCMAKE_BUILD_TYPE=Release \
             -DSHADOWHOOK_ROOT=${{ github.workspace }}/shadowhook \
-            -DBOKU_LOG=${{ (github.event_name == 'workflow_dispatch' && !inputs.log) && 'OFF' || 'ON' }}
+            -DBOKU_LOG=${{ (github.event_name == 'workflow_dispatch' && !inputs.log) && 'OFF' || 'ON' }} \
+            -DBOKU_BUILD_SEED=${{ github.run_id }} \
+            -DBOKU_BUILD_COMMIT=${{ github.sha }} \
+            -DBOKU_LIB_NAME=libfebrian.so
 
       - name: Build
         run: cmake --build build/${{ matrix.abi }} --config Release -j$(nproc)

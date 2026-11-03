@@ -56,6 +56,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 
 Letakkan `libfebrian.so` di folder library proses game, lalu muat lewat loader/injector.
 ShadowHook sudah ikut di dalam file itu, jadi tidak ada library tambahan yang perlu disalin.
+Nama file harus tetap `libfebrian.so`: salinan yang diganti namanya tidak bisa membuka tabel
+target, jadi mod tidak aktif dan game berjalan seperti biasa.
 
 ## Log
 
@@ -64,11 +66,17 @@ Setiap sesi menulis file sendiri di `Android/data/<package>/files/`, dengan nama
 menulis nama filenya, bukan path penuh. Package mengikuti game yang terpasang; APK asli memakai
 `com.pixticle.bokuboku`, salinan mod memakai `com.pixticle.bokuboku.mods`. Sesi lama tidak
 ditimpa dan tidak dihapus, jadi tiap kali game dijalankan akan ada satu file baru, dan nomor
-paling besar adalah sesi terakhir.
+paling besar adalah sesi terakhir. Setelah baris `Worker start`, log mencatat versi game dan
+pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
+`Mod by Febrian/Ian (code aeeL), build 17467c3`.
 
 ## Catatan
 
 - Hanya `arm64-v8a`.
+- Mod memeriksa nama file, keutuhan isi file, proses se-UID, dan library yang ikut termuat.
+  Kalau ada yang tidak cocok, mod melepas semua hook dan game kembali ke perilaku vanilla;
+  proses game tidak dimatikan. Proses yang dianggap ramah adalah aplikasi game sendiri,
+  `bin.mt.plus`, `magiskd`, `su`, dan `adbd`, ditambah library sistem.
 - Skin tersimpan sebagai slot model game, yaitu
   `Android/data/<package>/files/Save/Model/<nomor>/Data.txt`, berurutan dari nomor kosong
   pertama. Isi tiap `Data.txt` sama dengan yang ditulis game saat menyimpan model sendiri.

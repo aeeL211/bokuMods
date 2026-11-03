@@ -244,7 +244,6 @@ void installSkinHooks() {
     fieldsReady = fieldsReady && resolveField(modelClass, "_filename", modelFilename);
     LOGI("Skin model fields %s", fieldsReady ? "OK" : "missing, skins stay untouched");
 
-    installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook), "Guest__Manager.Add");
-    installHook(target(T_GUEST_NAME), reinterpret_cast<void*>(nameHook),
-                "Guest__Manager.Account__User_Name");
+    installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook));
+    installHook(target(T_GUEST_NAME), reinterpret_cast<void*>(nameHook));
 }

@@ -106,13 +106,10 @@ bool resolveWorldSize() {
 } // namespace
 
 void installMultiplayerHooks() {
-    installHook(target(T_PERMISSION_START), reinterpret_cast<void*>(permissionStartHook),
-                "Client.Permission__Start_Game");
-    installHook(target(T_PERMISSION_SAVE), reinterpret_cast<void*>(permissionSaveHook),
-                "Client.Permission__Save_World__Receive");
-    installHook(target(T_ROOM_SIZE), reinterpret_cast<void*>(roomSizeHook),
-                "Room_List.Term__Room__Data__Get__World_Size_");
+    installHook(target(T_PERMISSION_START), reinterpret_cast<void*>(permissionStartHook));
+    installHook(target(T_PERMISSION_SAVE), reinterpret_cast<void*>(permissionSaveHook));
+    installHook(target(T_ROOM_SIZE), reinterpret_cast<void*>(roomSizeHook));
     capReady = resolveWorldSize();
     LOGI("World size fields %s", capReady ? "OK" : "missing, cap stays per device");
-    installHook(target(T_WORLD_CAP), reinterpret_cast<void*>(capHook), "Size._Start");
+    installHook(target(T_WORLD_CAP), reinterpret_cast<void*>(capHook));
 }

@@ -85,9 +85,7 @@ void* helpHook(void* self, void* method) {
 } // namespace
 
 void installAboutHooks() {
-    installHook(target(T_ABOUT_VERSION), reinterpret_cast<void*>(aboutHook),
-                "About.Refresh__Version__Version");
-    installHook(target(T_TITLE_VERSION), reinterpret_cast<void*>(titleHook), "Title.Version__Text");
-    installHook(target(T_HELP_VERSION), reinterpret_cast<void*>(helpHook),
-                "Help.Refresh__Version__Text");
+    installHook(target(T_ABOUT_VERSION), reinterpret_cast<void*>(aboutHook));
+    installHook(target(T_TITLE_VERSION), reinterpret_cast<void*>(titleHook));
+    installHook(target(T_HELP_VERSION), reinterpret_cast<void*>(helpHook));
 }

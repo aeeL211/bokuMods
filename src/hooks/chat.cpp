@@ -195,6 +195,5 @@ void installChatHooks() {
     if (!guestReady)
         LOGE("Guest names not found; private messages show no receiver name");
 
-    installHook(target(T_GUEST_MSG_RECEIVE), reinterpret_cast<void*>(receiveHook),
-                "Guest__Chat.Msg__Receive__Text");
+    installHook(target(T_GUEST_MSG_RECEIVE), reinterpret_cast<void*>(receiveHook));
 }

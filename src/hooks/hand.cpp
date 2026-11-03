@@ -72,8 +72,6 @@ void refreshHand() {
 }
 
 void installHandHooks() {
-    installHook(target(T_HH_CHANGE), reinterpret_cast<void*>(hhChangeHook),
-                "Player__Manager.Hh__Change");
-    installHook(target(T_PLAYER_UPDATE), reinterpret_cast<void*>(updateHook),
-                "Player__Manager._Update");
+    installHook(target(T_HH_CHANGE), reinterpret_cast<void*>(hhChangeHook));
+    installHook(target(T_PLAYER_UPDATE), reinterpret_cast<void*>(updateHook));
 }

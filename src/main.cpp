@@ -6,8 +6,10 @@
 #include "hook.h"
 #include "hooks/hooks.h"
 #include "il2cpp_api.h"
+#include "info.h"
 #include "jni_bridge.h"
 #include "log.h"
+#include "protect.h"
 #include "targets.h"
 #include "toast.h"
 
@@ -19,6 +21,13 @@ namespace {
 
 void* worker(void*) {
     LOGI("Worker start");
+    // JNI_OnLoad runs after the constructor returns, so the activity class may
+    // not be cached yet when this thread starts.
+    for (int i = 0; i < 10 && !unityPlayer(); i++)
+        usleep(100000);
+    logEnvironment();
+    if (!initProtection())
+        return nullptr;
     if (!initShadowHook())
         return nullptr;
 
@@ -42,6 +51,11 @@ void* worker(void*) {
     }
     if (!dom) {
         LOGE("IL2CPP domain not ready");
+        return nullptr;
+    }
+
+    if (!protectionCheck()) {
+        LOGE("Protection: environment rejected");
         return nullptr;
     }
 
@@ -70,6 +84,8 @@ void* worker(void*) {
     installFecesHooks();
     installSkinHooks();
     installSlotHooks();
+    LOGI("Hooks installed: %d", installedHooks());
+    startProtectionWatchdog();
     loginToast();
     return nullptr;
 }

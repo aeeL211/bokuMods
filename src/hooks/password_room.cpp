@@ -111,9 +111,7 @@ void installPasswordHooks() {
         LOGE("Password room fields not found; password rooms stay manual");
     }
 
-    installHook(target(T_PASSWORD_OK), reinterpret_cast<void*>(okHook), "Password.Input__Ok");
-    installHook(target(T_PASSWORD_FIELD), reinterpret_cast<void*>(fieldHook),
-                "Password.Input_Field__Input");
-    installHook(target(T_PASSWORD_BUTTON), reinterpret_cast<void*>(buttonHook),
-                "Password.Term__Bottom_Button");
+    installHook(target(T_PASSWORD_OK), reinterpret_cast<void*>(okHook));
+    installHook(target(T_PASSWORD_FIELD), reinterpret_cast<void*>(fieldHook));
+    installHook(target(T_PASSWORD_BUTTON), reinterpret_cast<void*>(buttonHook));
 }

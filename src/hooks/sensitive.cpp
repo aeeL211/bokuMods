@@ -15,6 +15,5 @@ bool sensitiveHook(void*, void*, int32_t, bool, void*) { return false; }
 } // namespace
 
 void installSensitiveHooks() {
-    installHook(target(T_SENSITIVE_WORD), reinterpret_cast<void*>(sensitiveHook),
-                "UI__Note.Term__Sensitive_Word");
+    installHook(target(T_SENSITIVE_WORD), reinterpret_cast<void*>(sensitiveHook));
 }

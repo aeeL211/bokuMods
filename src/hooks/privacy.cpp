@@ -146,27 +146,16 @@ void installPrivacyHooks() {
         found += target(id).addr ? 1 : 0;
     LOGI("Email setters: %d of 4", found);
 
-    installHook(target(T_PRIVACY_MANAGER), reinterpret_cast<void*>(managerHook),
-                "Manager.Term__Privacy__Visible");
-    installHook(target(T_PRIVACY_BLACKLIST), reinterpret_cast<void*>(rowHook),
-                "Blacklist.Term__Privacy__Visible");
-    installHook(target(T_PRIVACY_ADD_FRIEND), reinterpret_cast<void*>(rowHook),
-                "Add_Friend.Term__Privacy__Visible");
-    installHook(target(T_PRIVACY_FRIEND_PROFILE), reinterpret_cast<void*>(rowHook),
-                "Friend_Profile.Term__Privacy__Visible");
-    installHook(target(T_PRIVACY_VERIFY), reinterpret_cast<void*>(rowHook),
-                "Verify.Term__Privacy__Visible");
-    installHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(rowHook),
-                "Verify.Term__Privacy__Visible__Email");
-    installHook(target(T_USER_SET), reinterpret_cast<void*>(setHook), "Manager.User__Set");
-    installHook(target(T_USER_SET_LOCAL), reinterpret_cast<void*>(setStringHook),
-                "Manager.User__Set__From_Local(string)");
-    installHook(target(T_USER_SET_LOCAL_ARRAY), reinterpret_cast<void*>(setArrayHook),
-                "Manager.User__Set__From_Local(string[])");
-    installHook(target(T_USER_SET_LOCAL_LIST), reinterpret_cast<void*>(setListHook),
-                "Manager.User__Set__From_Local(List)");
-    installHook(target(T_GUEST_COMMON), reinterpret_cast<void*>(commonHook),
-                "Guest.Account__Common");
-    installHook(target(T_GUEST_PRIVACY_EMAIL), reinterpret_cast<void*>(privacyEmailHook),
-                "Guest.Account__Privacy__Email");
+    installHook(target(T_PRIVACY_MANAGER), reinterpret_cast<void*>(managerHook));
+    installHook(target(T_PRIVACY_BLACKLIST), reinterpret_cast<void*>(rowHook));
+    installHook(target(T_PRIVACY_ADD_FRIEND), reinterpret_cast<void*>(rowHook));
+    installHook(target(T_PRIVACY_FRIEND_PROFILE), reinterpret_cast<void*>(rowHook));
+    installHook(target(T_PRIVACY_VERIFY), reinterpret_cast<void*>(rowHook));
+    installHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(rowHook));
+    installHook(target(T_USER_SET), reinterpret_cast<void*>(setHook));
+    installHook(target(T_USER_SET_LOCAL), reinterpret_cast<void*>(setStringHook));
+    installHook(target(T_USER_SET_LOCAL_ARRAY), reinterpret_cast<void*>(setArrayHook));
+    installHook(target(T_USER_SET_LOCAL_LIST), reinterpret_cast<void*>(setListHook));
+    installHook(target(T_GUEST_COMMON), reinterpret_cast<void*>(commonHook));
+    installHook(target(T_GUEST_PRIVACY_EMAIL), reinterpret_cast<void*>(privacyEmailHook));
 }

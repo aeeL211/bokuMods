@@ -93,11 +93,8 @@ void installTextInputHooks() {
         LOGE("Name limit field not found; profile name stays capped");
     }
 
-    installHook(target(T_INPUT_VALIDATE), reinterpret_cast<void*>(validateHook),
-                "UIInput.Validate");
-    installHook(target(T_INPUT_INSERT), reinterpret_cast<void*>(insertHook), "UIInput.Insert");
-    installHook(target(T_KEYBOARD_OPEN), reinterpret_cast<void*>(keyboardOpenHook),
-                "UI__Manager.Keyboard__Open");
-    installHook(target(T_NAME_CHECK), reinterpret_cast<void*>(nameCheckHook),
-                "Account.Name__Check");
+    installHook(target(T_INPUT_VALIDATE), reinterpret_cast<void*>(validateHook));
+    installHook(target(T_INPUT_INSERT), reinterpret_cast<void*>(insertHook));
+    installHook(target(T_KEYBOARD_OPEN), reinterpret_cast<void*>(keyboardOpenHook));
+    installHook(target(T_NAME_CHECK), reinterpret_cast<void*>(nameCheckHook));
 }

@@ -101,6 +101,5 @@ void installSlotHooks() {
         LOGE("Slot fields: %d of %d found", ready, count);
     LOGI("Slot cap %d", kSlotCap);
 
-    installHook(target(T_SLOT_LOAD), reinterpret_cast<void*>(loadHook),
-                "Global.Data__Load__Data_Slot_Num_");
+    installHook(target(T_SLOT_LOAD), reinterpret_cast<void*>(loadHook));
 }

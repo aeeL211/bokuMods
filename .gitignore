@@ -3,3 +3,4 @@ build/
 *.aar
 shadowhook/
 dist/
+__pycache__/

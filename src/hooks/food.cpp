@@ -28,20 +28,19 @@ template <TargetId id> void eatEndHook(void* self, void* method) {
     refreshHand();
 }
 
-template <TargetId id> void installEatEnd(const char* label) {
-    installHook(target(id), reinterpret_cast<void*>(eatEndHook<id>), label);
+template <TargetId id> void installEatEnd() {
+    installHook(target(id), reinterpret_cast<void*>(eatEndHook<id>));
 }
 
 } // namespace
 
 void installFoodHooks() {
-    installEatEnd<T_EAT_END_KNEEL>("Player__State__Sp__Tile__Kneel.Gingerbread_Man__Eat__End");
-    installEatEnd<T_EAT_END_SIT_F>("Player__State__Sp__Tile__Sit__F.Gingerbread_Man__Eat__End");
-    installEatEnd<T_EAT_END_SIT_S>("Player__State__Sp__Tile__Sit__S.Gingerbread_Man__Eat__End");
-    installEatEnd<T_EAT_END_FOOD>("Player__State__Std__Action__Hh__Food.Gingerbread_Man__Eat__End");
-    installEatEnd<T_EAT_END_BUN_KNEEL>("Player__State__Sp__Tile__Kneel.Hot_Cross_Bun__Eat__End");
-    installEatEnd<T_EAT_END_BUN_SIT_F>("Player__State__Sp__Tile__Sit__F.Hot_Cross_Bun__Eat__End");
-    installEatEnd<T_EAT_END_BUN_SIT_S>("Player__State__Sp__Tile__Sit__S.Hot_Cross_Bun__Eat__End");
-    installEatEnd<T_EAT_END_BUN_FOOD>(
-        "Player__State__Std__Action__Hh__Food.Hot_Cross_Bun__Eat__End");
+    installEatEnd<T_EAT_END_KNEEL>();
+    installEatEnd<T_EAT_END_SIT_F>();
+    installEatEnd<T_EAT_END_SIT_S>();
+    installEatEnd<T_EAT_END_FOOD>();
+    installEatEnd<T_EAT_END_BUN_KNEEL>();
+    installEatEnd<T_EAT_END_BUN_SIT_F>();
+    installEatEnd<T_EAT_END_BUN_SIT_S>();
+    installEatEnd<T_EAT_END_BUN_FOOD>();
 }

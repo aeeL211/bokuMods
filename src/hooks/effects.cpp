@@ -19,10 +19,8 @@ void debrisTileHook(void*, float, float, int32_t, void*, void*) {}
 } // namespace
 
 void installEffectHooks() {
-    installHook(target(T_SHAKE), reinterpret_cast<void*>(shakeHook), "Camera__Manager.Shake");
-    installHook(target(T_SHAKE_NUM), reinterpret_cast<void*>(shakeNumHook),
-                "Camera__Manager.Shake(int, float)");
-    installHook(target(T_DEBRIS), reinterpret_cast<void*>(debrisHook), "Eff__Type__Tile.Debris");
-    installHook(target(T_DEBRIS_TILE), reinterpret_cast<void*>(debrisTileHook),
-                "Eff__Type__Tile.Debris__Tile");
+    installHook(target(T_SHAKE), reinterpret_cast<void*>(shakeHook));
+    installHook(target(T_SHAKE_NUM), reinterpret_cast<void*>(shakeNumHook));
+    installHook(target(T_DEBRIS), reinterpret_cast<void*>(debrisHook));
+    installHook(target(T_DEBRIS_TILE), reinterpret_cast<void*>(debrisTileHook));
 }

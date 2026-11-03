@@ -59,8 +59,8 @@ void installIapHooks() {
         LOGE("Field Iap.ui not found; free purchase will use the store");
     }
 
-    installHook(target(T_BUY), reinterpret_cast<void*>(buyHook), "Iap.BuyProductID");
-    installHook(target(T_UNLOCK_CHECK), reinterpret_cast<void*>(unlockHook), "_Unlock.Check");
+    installHook(target(T_BUY), reinterpret_cast<void*>(buyHook));
+    installHook(target(T_UNLOCK_CHECK), reinterpret_cast<void*>(unlockHook));
 
     if (!target(T_PURCHASE_COMPLETE).addr) {
         LOGE("Target not found: UI__Iap.Purchase__Complete");

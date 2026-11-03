@@ -213,16 +213,10 @@ void installFecesHooks() {
     }
     LOGI("Feces fields OK");
 
-    installHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(chargeUpdateHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Update");
-    installHook(target(T_FECES_CHARGE_STD), reinterpret_cast<void*>(chargeStdHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Std_");
-    installHook(target(T_FECES_CHARGE_UP), reinterpret_cast<void*>(chargeUpHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Up");
-    installHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(throwUpdateHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Update");
-    installHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(actionStdHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Std");
-    installHook(target(T_FECES_ACTION_UP), reinterpret_cast<void*>(actionUpHook),
-                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Up");
+    installHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(chargeUpdateHook));
+    installHook(target(T_FECES_CHARGE_STD), reinterpret_cast<void*>(chargeStdHook));
+    installHook(target(T_FECES_CHARGE_UP), reinterpret_cast<void*>(chargeUpHook));
+    installHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(throwUpdateHook));
+    installHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(actionStdHook));
+    installHook(target(T_FECES_ACTION_UP), reinterpret_cast<void*>(actionUpHook));
 }

@@ -263,22 +263,13 @@ void installWeaponHooks() {
     if (!target(T_ROCK_ACTION).addr || !target(T_ROCK_END_DIR).addr)
         LOGE("Buster refire methods not found; standing buster stays stock");
 
-    installHook(target(T_STATE_UPDATE), reinterpret_cast<void*>(stateUpdateHook),
-                "Player__State._Update");
-    installHook(target(T_GUN_END), reinterpret_cast<void*>(gunEndHook),
-                "Cmn.Term__Gun_Shoot__End__Update__End");
-    installHook(target(T_GUN_ACTION_END), reinterpret_cast<void*>(gunActionEndHook),
-                "Cmn.Term__Gun_Shoot__Action__Update__End");
-    installHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(gunUpdateHook),
-                "Weapon.Gun_Shoot__Action__Update");
-    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(busterUpdateHook),
-                "Weapon.Rockman__Rock_Buster__Action__Update");
-    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(busterActionEndHook),
-                "Cmn.Term__Rockman__Rock_Buster__Action__Update__End");
-    installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(busterEndUpdateHook),
-                "Weapon.Rockman__Rock_Buster__End__Update");
-    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(busterEndToActionHook),
-                "Cmn.Term__Rockman__Rock_Buster__End__To__Action");
-    installHook(target(T_ROCK_ID), reinterpret_cast<void*>(busterIdHook),
-                "Cmn.Rockman__Rock_Buster__Id");
+    installHook(target(T_STATE_UPDATE), reinterpret_cast<void*>(stateUpdateHook));
+    installHook(target(T_GUN_END), reinterpret_cast<void*>(gunEndHook));
+    installHook(target(T_GUN_ACTION_END), reinterpret_cast<void*>(gunActionEndHook));
+    installHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(gunUpdateHook));
+    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(busterUpdateHook));
+    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(busterActionEndHook));
+    installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(busterEndUpdateHook));
+    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(busterEndToActionHook));
+    installHook(target(T_ROCK_ID), reinterpret_cast<void*>(busterIdHook));
 }

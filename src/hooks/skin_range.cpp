@@ -163,8 +163,6 @@ void installSkinRangeHooks() {
         LOGE("Portrait range fields not found; portrait X/Y stays -5..5");
     }
 
-    installHook(target(T_POS_REFRESH_STEP), reinterpret_cast<void*>(posStepHook),
-                "Pos.Refresh__Step");
-    installHook(target(T_PORTRAIT_REFRESH_STEP), reinterpret_cast<void*>(portraitStepHook),
-                "Portrait.Pos.Refresh__Step");
+    installHook(target(T_POS_REFRESH_STEP), reinterpret_cast<void*>(posStepHook));
+    installHook(target(T_PORTRAIT_REFRESH_STEP), reinterpret_cast<void*>(portraitStepHook));
 }

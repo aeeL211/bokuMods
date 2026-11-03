@@ -57,12 +57,8 @@ void dateCheckHook(int32_t* year, int32_t* month, int32_t* day, void* method) {
 } // namespace
 
 void installProfileHooks() {
-    installHook(target(T_BIRTHDAY_REFRESH), reinterpret_cast<void*>(birthdayHook),
-                "Profile.Birthday__Refresh_");
-    installHook(target(T_BIRTHDAY_LENGTH), reinterpret_cast<void*>(birthdayLengthHook),
-                "Profile.Birthday__Length");
-    installHook(target(T_BIRTHDAY_END), reinterpret_cast<void*>(birthdayEndHook),
-                "Profile.Input_Field__End__Birthday");
-    installHook(target(T_DATE_CHECK), reinterpret_cast<void*>(dateCheckHook),
-                "MyBehaviour.Date_Check");
+    installHook(target(T_BIRTHDAY_REFRESH), reinterpret_cast<void*>(birthdayHook));
+    installHook(target(T_BIRTHDAY_LENGTH), reinterpret_cast<void*>(birthdayLengthHook));
+    installHook(target(T_BIRTHDAY_END), reinterpret_cast<void*>(birthdayEndHook));
+    installHook(target(T_DATE_CHECK), reinterpret_cast<void*>(dateCheckHook));
 }

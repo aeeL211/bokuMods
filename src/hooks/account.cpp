@@ -43,6 +43,5 @@ void installAccountHooks() {
         LOGE("Account fields not found; introduce stays capped");
     }
 
-    installHook(target(T_INTRODUCE_SET), reinterpret_cast<void*>(introduceHook),
-                "Detail.Introduce__Set");
+    installHook(target(T_INTRODUCE_SET), reinterpret_cast<void*>(introduceHook));
 }
