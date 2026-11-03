@@ -51,8 +51,6 @@ ClassSlot classes[] = {
     {"Eff__Type__Tile", nullptr},
     {"Player__Manager", nullptr},
     {"Player__State__Std__Action__Hh__Nature", nullptr},
-    {"Player__Input__Sp__Obj__Animal", nullptr},
-    {"Player__Input__Std__Air", nullptr},
 };
 
 // On arm64 the array header is klass, monitor and bounds (pointers) plus

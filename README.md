@@ -43,11 +43,6 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   buster, jadi bisa dilempar berkali-kali. Setiap lemparan memakai kekuatan penuh, jadi jaraknya
   tidak lagi tergantung berapa lama tombol ditahan sebelum dilepas. Arah lemparan mengikuti
   bidikan saat tombol ditekan, jadi bisa lurus maupun ke atas.
-- **Hewan tunggangan hanya melompat sekali** — selama tombol interaksi ditahan, anjing, babi,
-  domba, kuda, sapi, rusa, dan alpaka terus melompat ke atas setiap kali mendarat, jadi cukup
-  tahan tombolnya sampai selesai melompat.
-- **Tidak bisa melompat di udara** — tombol lompat yang ditekan saat melayang langsung memulai
-  lompatan baru, jadi lompatan bisa ditekan berulang kali di tengah udara.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat. Email pemain lain hanya ikut terkirim kalau pemain itu sendiri
   menyalakan opsi tampilkan email, jadi baris email di daftar teman, tambah teman, verifikasi,
@@ -99,8 +94,5 @@ pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
   Setiap DM yang tampil juga bisa memicu bunyi notifikasi chat.
 - Sensor kata hanya dilewati di aplikasi yang memakai mod; klien tanpa mod tetap menyaring kata
   yang dikirim maupun diterimanya.
-- Selama menunggang hewan, tombol interaksi yang ditahan dipakai untuk melompat. Objek yang bisa
-  diinteraksi tetap dilayani lebih dulu pada frame tombol ditekan, jadi menekan sekali tetap
-  berfungsi seperti biasa.
 - Gunakan di akun sendiri; mod ini bisa melanggar ketentuan layanan game.
 - Lisensi pihak ketiga ada di `THIRD_PARTY_NOTICES.md`.

@@ -19,7 +19,6 @@ void installKnockbackHooks();
 void installFecesHooks();
 void installHandHooks();
 void installSlotHooks();
-void installJumpHooks();
 
 // True while the interaction button is held for this player.
 bool actionHeld(void* manager);
