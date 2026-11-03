@@ -490,9 +490,7 @@ bool runCommand(Session& s, int argc, char** argv) {
 
 // A keyboard layout can send a lookalike slash, so every slash form marks a
 // command; the rest of the line still has to be plain ASCII.
-bool isCommandMark(uint16_t c) {
-    return c == '/' || c == 0xFF0F || c == 0x2044 || c == 0x2215;
-}
+bool isCommandMark(uint16_t c) { return c == '/' || c == 0xFF0F || c == 0x2044 || c == 0x2215; }
 
 bool isHidden(uint16_t c) {
     return c == 0xFEFF || c == 0x200B || c == 0x200E || c == 0x200F || c == 0x00A0;
@@ -528,8 +526,8 @@ void logRejected(void* text) {
     char units[64] = "";
     int used = 0;
     for (int32_t i = 0; chars && i < len && i < 8 && used < 40; i++) {
-        used += snprintf(units + used, sizeof(units) - static_cast<size_t>(used), "%04X ",
-                         chars[i]);
+        used +=
+            snprintf(units + used, sizeof(units) - static_cast<size_t>(used), "%04X ", chars[i]);
     }
     char plain[64];
     if (!toUtf8(text, plain, sizeof(plain)))
