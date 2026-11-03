@@ -15,6 +15,7 @@ struct Api {
     void* (*methods)(void*, void**);
     const char* (*methodName)(void*);
     int (*paramCount)(void*);
+    void* (*param)(void*, uint32_t);
     void* (*attach)(void*);
     void* (*fieldFromName)(void*, const char*);
     size_t (*fieldOffset)(void*);

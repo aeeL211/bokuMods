@@ -285,6 +285,7 @@ bool bindApi() {
     BIND(methods, "il2cpp_class_get_methods");
     BIND(methodName, "il2cpp_method_get_name");
     BIND(paramCount, "il2cpp_method_get_param_count");
+    BIND(param, "il2cpp_method_get_param");
     BIND(attach, "il2cpp_thread_attach");
     BIND(fieldFromName, "il2cpp_class_get_field_from_name");
     BIND(fieldOffset, "il2cpp_field_get_offset");

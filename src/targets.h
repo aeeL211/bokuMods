@@ -79,6 +79,8 @@ struct Target {
     void* addr;
     void* method;
     void* orig;
+    // Class name of the last parameter, for overloads that share name and arity.
+    const char* paramType = nullptr;
 };
 
 Target& target(TargetId id);

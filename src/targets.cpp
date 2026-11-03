@@ -89,6 +89,19 @@ Target targets[T_COUNT] = {
      nullptr},
 };
 
+// Overloads can share a name and an arity, so a target may also name the class
+// of its last parameter. An array class is "String[]" and a generic one keeps
+// its "List`1" name, so an exact compare is enough to pick one overload.
+bool paramMatches(const Target& t, void* m) {
+    if (!t.paramType)
+        return true;
+    Api& api = il2cppApi();
+    void* type = api.param(m, static_cast<uint32_t>(t.argc - 1));
+    void* cls = type ? api.classFromType(type) : nullptr;
+    const char* name = cls ? api.className(cls) : nullptr;
+    return name && !strcmp(t.paramType, name);
+}
+
 } // namespace
 
 Target& target(TargetId id) { return targets[id]; }
@@ -140,6 +153,8 @@ int scan() {
                     if (t.addr)
                         continue;
                     if (strcmp(t.cls, cn) || strcmp(t.name, mn) || t.argc != argc)
+                        continue;
+                    if (!paramMatches(t, m))
                         continue;
 
                     void* a = methodAddr(m);
