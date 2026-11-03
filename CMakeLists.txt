@@ -136,6 +136,7 @@ add_library(febrian SHARED
   src/hooks/effects.cpp
   src/hooks/knockback.cpp
   src/hooks/feces.cpp
+  src/hooks/jump.cpp
   src/hooks/skin.cpp
   src/hooks/slots.cpp
 )

@@ -77,6 +77,7 @@ void* worker(void*) {
     installEffectHooks();
     installKnockbackHooks();
     installFecesHooks();
+    installJumpHooks();
     installSkinHooks();
     installSlotHooks();
     LOGI("Hooks installed: %d", installedHooks());

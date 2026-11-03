@@ -80,3 +80,21 @@ T_USER_SET_LOCAL_ARRAY|Net__Account__Manager|User__Set__From_Local|2|String[]
 T_USER_SET_LOCAL_LIST|Net__Account__Manager|User__Set__From_Local|2|List`1
 T_GUEST_NAME|Guest__Manager|Account__User_Name|2|
 T_DATA_MODEL_NAME|Data__Model|File__Write__Name|2|
+# Mounts: one ground terminator and one jump start per animal.
+T_MOUNT_GROUND_DOG|Player__Input__Sp__Obj__Animal|Term__Dog__L__Ground|0|
+T_MOUNT_JUMP_DOG|Player__State__Sp__Obj__Animal__Dog__L|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_PIG|Player__Input__Sp__Obj__Animal|Term__Pig__Ground|0|
+T_MOUNT_JUMP_PIG|Player__State__Sp__Obj__Animal__Pig|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_SHEEP|Player__Input__Sp__Obj__Animal|Term__Sheep__Ground|0|
+T_MOUNT_JUMP_SHEEP|Player__State__Sp__Obj__Animal__Sheep|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_HORSE|Player__Input__Sp__Obj__Animal|Term__Horse__Ground|0|
+T_MOUNT_JUMP_HORSE|Player__State__Sp__Obj__Animal__Horse|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_COW|Player__Input__Sp__Obj__Animal|Term__Cow__Ground|0|
+T_MOUNT_JUMP_COW|Player__State__Sp__Obj__Animal__Cow|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_DEER|Player__Input__Sp__Obj__Animal|Term__Deer__Ground|0|
+T_MOUNT_JUMP_DEER|Player__State__Sp__Obj__Animal__Deer|Ride_State__Jump__Start|1|
+T_MOUNT_GROUND_ALPACA|Player__Input__Sp__Obj__Animal|Term__Alpaca__Ground|0|
+T_MOUNT_JUMP_ALPACA|Player__State__Sp__Obj__Animal__Alpaca|Ride_State__Jump__Start|1|
+# Free jump: replay a mid-air press into the stock ground jump.
+T_AIR_TERM|Player__Input__Std__Air|Term|0|
+T_GROUND_JUMP|Player__Input__Std__Ground|Term__Jump|0|
