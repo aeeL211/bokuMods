@@ -16,4 +16,5 @@ void installAccountHooks();
 void installWeaponHooks();
 void installEffectHooks();
 void installKnockbackHooks();
+void installFecesHooks();
 void installSlotHooks();

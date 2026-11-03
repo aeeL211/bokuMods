@@ -65,6 +65,7 @@ void* worker(void*) {
     installWeaponHooks();
     installEffectHooks();
     installKnockbackHooks();
+    installFecesHooks();
     installSkinHooks();
     installSlotHooks();
     loginToast();
