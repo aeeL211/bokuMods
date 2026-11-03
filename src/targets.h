@@ -85,6 +85,7 @@ enum TargetId {
     T_USER_SET_LOCAL_LIST,
     T_GUEST_NAME,
     T_DATA_MODEL_NAME,
+    T_SPR_SET,
     T_COUNT,
 };
 

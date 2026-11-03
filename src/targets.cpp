@@ -109,6 +109,7 @@ Target targets[T_COUNT] = {
     {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "List`1"},
     {"Guest__Manager", "Account__User_Name", 2, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Write__Name", 2, nullptr, nullptr, nullptr},
+    {"Player__Spr", "_Set", 1, nullptr, nullptr, nullptr},
 };
 
 // Overloads can share a name and an arity, so a target may also name the class

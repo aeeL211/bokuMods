@@ -8,12 +8,14 @@ namespace {
 // A food leaves the hand only from its own ...__Eat__End, which asks
 // Player__Manager.Hh__Change for the empty hand id. Every food and posture has
 // its own copy of that method, so each keeps the hand change back and the piece
-// stays in hand for the next bite. Ice cream stays out on purpose: its treats
-// end the item by design.
+// stays in hand. Ice cream stays out on purpose: its treats end the item by
+// design.
 //
-// The eat animation hides the held sprite right after that hand change, so the
-// hand is re-applied once the original returns. Without it the food is still in
-// hand but invisible until the player moves and the state refresh rebuilds it.
+// The eat end then parks the player in that food's finished state, whose sprite
+// build keeps the hand layer off, so the piece is still in hand but invisible
+// until the next state change, which is why a move brings it back. The hand
+// refresh rebuilds the sprite for the state the piece was shown in, so it comes
+// back without a move.
 template <TargetId id> void eatEndHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(id).orig);
     if (!orig)
