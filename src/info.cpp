@@ -38,9 +38,8 @@ bool appVersion(char* name, size_t size, jint& code) {
     if (activity) {
         activityClass = env->GetObjectClass(activity);
         if (activityClass) {
-            jmethodID getManager =
-                env->GetMethodID(activityClass, "getPackageManager",
-                                 "()Landroid/content/pm/PackageManager;");
+            jmethodID getManager = env->GetMethodID(activityClass, "getPackageManager",
+                                                    "()Landroid/content/pm/PackageManager;");
             if (getManager)
                 manager = env->CallObjectMethod(activity, getManager);
             jmethodID getPackage =
@@ -52,9 +51,9 @@ bool appVersion(char* name, size_t size, jint& code) {
     if (manager && package) {
         managerClass = env->GetObjectClass(manager);
         if (managerClass) {
-            jmethodID getInfo = env->GetMethodID(
-                managerClass, "getPackageInfo",
-                "(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;");
+            jmethodID getInfo =
+                env->GetMethodID(managerClass, "getPackageInfo",
+                                 "(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;");
             if (getInfo)
                 info = env->CallObjectMethod(manager, getInfo, package, 0);
         }

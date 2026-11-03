@@ -53,8 +53,7 @@ const char* baseName(const char* path) {
 
 bool libraryInfo() {
     Dl_info info;
-    if (!dladdr(reinterpret_cast<void*>(&libraryInfo), &info) || !info.dli_fbase ||
-        !info.dli_fname)
+    if (!dladdr(reinterpret_cast<void*>(&libraryInfo), &info) || !info.dli_fbase || !info.dli_fname)
         return false;
     libraryBase = info.dli_fbase;
     snprintf(libraryPath, sizeof(libraryPath), "%s", info.dli_fname);
@@ -72,8 +71,8 @@ bool integrityOk() {
         eh->e_ident[EI_DATA] != ELFDATA2LSB || eh->e_machine != EM_AARCH64)
         return false;
 
-    const auto* ph = reinterpret_cast<const Elf64_Phdr*>(static_cast<const uint8_t*>(libraryBase) +
-                                                          eh->e_phoff);
+    const auto* ph =
+        reinterpret_cast<const Elf64_Phdr*>(static_cast<const uint8_t*>(libraryBase) + eh->e_phoff);
     uint64_t hash = 0xcbf29ce484222325ULL;
     for (int i = 0; i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD || (ph[i].p_flags & PF_W))
