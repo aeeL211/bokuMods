@@ -108,9 +108,7 @@ void stringOf(void* text, char* out, size_t size, const char* fallback) {
     snprintf(out, size, "%s", fallback);
 }
 
-void* accountNameOf(void* guest) {
-    return readPtr(readPtr(guest, guestAccount), accountName);
-}
+void* accountNameOf(void* guest) { return readPtr(readPtr(guest, guestAccount), accountName); }
 
 void* ownKey(void* player) {
     auto key = reinterpret_cast<KeyFn>(target(T_PLAYER_KEY).orig);
@@ -136,13 +134,9 @@ void stopSpoof() {
     spoofKey = nullptr;
 }
 
-void* pipeOf(void* multi) {
-    return readPtr(readPtr(multi, multiTransfer), transferPipe);
-}
+void* pipeOf(void* multi) { return readPtr(readPtr(multi, multiTransfer), transferPipe); }
 
-void* hostOf(void* multi) {
-    return readPtr(readPtr(multi, multiTransfer), transferHost);
-}
+void* hostOf(void* multi) { return readPtr(readPtr(multi, multiTransfer), transferHost); }
 
 // The guest list holds the remote players, so the local player is always slot
 // one and the numbers never depend on the room list order the game happens to
