@@ -25,12 +25,13 @@ Field managerThrowField = {};
 Field chargeField = {};
 Field chargeActiveField = {};
 
-// Every player throws from its own state object, so the cadence and the last
-// throw direction follow the player manager.
+// Every player throws from its own state object, so the cadence, the last
+// throw direction and the charge frames follow the player manager.
 struct Throw {
     void* manager;
     long long lastMs;
     bool up;
+    int chargeFrames;
 };
 constexpr int kThrowCount = 32;
 Throw throws[kThrowCount] = {};
@@ -76,6 +77,7 @@ void markThrow(void* self, bool up) {
     Throw& t = throwFor(manager);
     t.up = up;
     t.lastMs = nowMs();
+    t.chargeFrames = 0;
 }
 
 // The charge keeps the release handler armed, so it is dropped once the throw
@@ -88,12 +90,44 @@ void clearCharge(void* manager) {
         writeBool(charge, chargeActiveField, false);
 }
 
-// The throw action ends on its own and leaves the throw state, so starting the
-// same entry the release uses puts the player back into it, direction included.
+// The standalone throw calls a single entry that takes the power, so the same
+// entry is reused for the repeat.
 void throwNow(void* self, bool up) {
     void* entry = target(up ? T_FECES_ACTION_UP : T_FECES_ACTION_STD).addr;
     if (entry)
         reinterpret_cast<void (*)(void*, float, void*)>(entry)(self, kFullPower, nullptr);
+}
+
+// The straight charge is entered from every aim, and the look-up one replaces it
+// when the player aims up, so the last charge entry is the direction the held
+// button has to repeat. Only a direction change re-arms the frame count, so a
+// fresh charge gets its aim settled without holding a repeated entry back.
+void setChargeDirection(void* self, bool up) {
+    void* manager = readPtr(self, managerField);
+    if (!manager)
+        return;
+    Throw& t = throwFor(manager);
+    if (t.up != up)
+        t.chargeFrames = 0;
+    t.up = up;
+}
+
+void chargeStdHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_STD).orig);
+    if (!orig)
+        return;
+    orig(self, method);
+    setChargeDirection(self, false);
+}
+
+// The look-up charge has one caller, the input switch that runs while the
+// player aims up during a charge.
+void chargeUpHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UP).orig);
+    if (!orig)
+        return;
+    orig(self, method);
+    setChargeDirection(self, true);
 }
 
 // The empty hand id at the end of the throw takes the piece out of the hands.
@@ -139,6 +173,8 @@ void throwUpdateHook(void* self, void* method) {
 
 // Runs every frame of the charge state. A held button throws at once instead of
 // waiting for the release, so the first throw of a hold lands like every repeat.
+// The aim switch runs on the next input pass, so the first charge frame only
+// counts and the throw starts one frame later with the settled direction.
 void chargeUpdateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UPDATE).orig);
     if (!orig)
@@ -149,6 +185,10 @@ void chargeUpdateHook(void* self, void* method) {
     if (!manager || !actionHeld(manager))
         return;
     Throw& t = throwFor(manager);
+    if (t.chargeFrames == 0) {
+        t.chargeFrames = 1;
+        return;
+    }
     if (!cadenceReady(t))
         return;
     clearCharge(manager);
@@ -175,6 +215,10 @@ void installFecesHooks() {
 
     installHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(chargeUpdateHook),
                 "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Update");
+    installHook(target(T_FECES_CHARGE_STD), reinterpret_cast<void*>(chargeStdHook),
+                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Std_");
+    installHook(target(T_FECES_CHARGE_UP), reinterpret_cast<void*>(chargeUpHook),
+                "Player__State__Std__Action__Hh__Nature.Feces__Throw__Charge__Up");
     installHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(throwUpdateHook),
                 "Player__State__Std__Action__Hh__Nature.Feces__Throw__Action__Update");
     installHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(actionStdHook),

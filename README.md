@@ -37,7 +37,8 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Feces hilang setelah dilempar** — feces coklat, hijau, dan pink tetap di tangan setelah
   dilempar, otomatis terlempar lagi selama tombol interaksi ditahan, sama seperti pistol dan
   buster, jadi bisa dilempar berkali-kali. Setiap lemparan memakai kekuatan penuh, jadi jaraknya
-  tidak lagi tergantung berapa lama tombol ditahan sebelum dilepas.
+  tidak lagi tergantung berapa lama tombol ditahan sebelum dilepas. Arah lemparan mengikuti
+  bidikan saat tombol ditekan, jadi bisa lurus maupun ke atas.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
   akun selalu terlihat. Email pemain lain hanya ikut terkirim kalau pemain itu sendiri
   menyalakan opsi tampilkan email, jadi baris email di daftar teman, tambah teman, verifikasi,
