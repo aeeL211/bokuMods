@@ -38,9 +38,10 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Feces hilang setelah dilempar** — feces coklat, hijau, dan pink tetap di tangan setelah
   dilempar, jadi bisa dilempar berkali-kali.
 - **Detail akun disembunyikan** — setelan sembunyikan milik pemain lain diabaikan, jadi detail
-  akun selalu terlihat. Email pemain lain tidak ikut diunduh game, jadi baris email di daftar
-  teman, tambah teman, verifikasi, dan halaman profil menampilkan ID akun sebagai gantinya,
-  bukan kotak kosong.
+  akun selalu terlihat. Email pemain lain hanya ikut terkirim kalau pemain itu sendiri
+  menyalakan opsi tampilkan email, jadi baris email di daftar teman, tambah teman, verifikasi,
+  dan halaman profil menampilkan tulisan privasi email pemiliknya (umum, hanya teman, atau
+  sembunyi) sebagai gantinya, bukan kotak kosong.
 - **Kata kasar disensor** — semua pengecekan kata terlarang dilewati, jadi chat, nama, dan teks
   profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
