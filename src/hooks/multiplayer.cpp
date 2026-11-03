@@ -20,15 +20,17 @@ Field presetH = {};
 Field multiMax = {};
 bool capReady = false;
 
-// The host sends the starting permission set, and a guest cannot ask for more
-// later, so all three flags are forced before the game stores them.
+// The host owns the build and destroy permissions and rejects anything a guest
+// tries to do beyond them, so both flags now pass through unchanged. Only the
+// save-world flag is still forced, because the host sends it once at the start
+// and a guest gets no other chance to enable it.
 void permissionStartHook(void* self, bool build, bool destroy, bool, void* method) {
     LOGI("Permission: start game build=%d destroy=%d", build, destroy);
     auto orig =
         reinterpret_cast<void (*)(void*, bool, bool, bool, void*)>(target(T_PERMISSION_START).orig);
     if (!orig)
         return;
-    orig(self, true, true, true, method);
+    orig(self, build, destroy, true, method);
 }
 
 void permissionSaveHook(void* self, bool, void* method) {
