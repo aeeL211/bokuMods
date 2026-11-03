@@ -8,14 +8,16 @@ namespace {
 // A food leaves the hand only from its own ...__Eat__End, which asks
 // Player__Manager.Hh__Change for the empty hand id. Every food and posture has
 // its own copy of that method, so each keeps the hand change back and the piece
-// stays in hand. Ice cream stays out on purpose: its treats end the item by
-// design.
+// stays in hand. Sushi, ice cream and popsicle stay out on purpose: one bite
+// ends those items, and the game then parks the player in a finished pose that
+// keeps the hand layer off, so the kept piece stays invisible until the next
+// move. Gingerbread and hot cross bun end their last bite in a pose that still
+// draws the hand.
 //
-// The eat end then parks the player in that food's finished state, whose sprite
-// build keeps the hand layer off, so the piece is still in hand but invisible
-// until the next state change, which is why a move brings it back. The hand
-// refresh rebuilds the sprite for the state the piece was shown in, so it comes
-// back without a move.
+// The eat animation hides the held sprite right after that hand change, so the
+// hand is rebuilt at the end of that player's update, when the state machine has
+// moved past the eat animation. Without it the food is still in hand but
+// invisible until the player moves and the state refresh rebuilds it.
 template <TargetId id> void eatEndHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(id).orig);
     if (!orig)
@@ -37,10 +39,6 @@ void installFoodHooks() {
     installEatEnd<T_EAT_END_SIT_F>("Player__State__Sp__Tile__Sit__F.Gingerbread_Man__Eat__End");
     installEatEnd<T_EAT_END_SIT_S>("Player__State__Sp__Tile__Sit__S.Gingerbread_Man__Eat__End");
     installEatEnd<T_EAT_END_FOOD>("Player__State__Std__Action__Hh__Food.Gingerbread_Man__Eat__End");
-    installEatEnd<T_EAT_END_SUSHI_KNEEL>("Player__State__Sp__Tile__Kneel.Sushi__Eat__End");
-    installEatEnd<T_EAT_END_SUSHI_SIT_F>("Player__State__Sp__Tile__Sit__F.Sushi__Eat__End");
-    installEatEnd<T_EAT_END_SUSHI_SIT_S>("Player__State__Sp__Tile__Sit__S.Sushi__Eat__End");
-    installEatEnd<T_EAT_END_SUSHI_FOOD>("Player__State__Std__Action__Hh__Food.Sushi__Eat__End");
     installEatEnd<T_EAT_END_BUN_KNEEL>("Player__State__Sp__Tile__Kneel.Hot_Cross_Bun__Eat__End");
     installEatEnd<T_EAT_END_BUN_SIT_F>("Player__State__Sp__Tile__Sit__F.Hot_Cross_Bun__Eat__End");
     installEatEnd<T_EAT_END_BUN_SIT_S>("Player__State__Sp__Tile__Sit__S.Hot_Cross_Bun__Eat__End");

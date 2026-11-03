@@ -39,10 +39,6 @@ Target targets[T_COUNT] = {
     {"Player__State__Sp__Tile__Sit__S", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Std__Action__Hh__Food", "Gingerbread_Man__Eat__End", 0, nullptr, nullptr,
      nullptr},
-    {"Player__State__Sp__Tile__Kneel", "Sushi__Eat__End", 0, nullptr, nullptr, nullptr},
-    {"Player__State__Sp__Tile__Sit__F", "Sushi__Eat__End", 0, nullptr, nullptr, nullptr},
-    {"Player__State__Sp__Tile__Sit__S", "Sushi__Eat__End", 0, nullptr, nullptr, nullptr},
-    {"Player__State__Std__Action__Hh__Food", "Sushi__Eat__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Sp__Tile__Kneel", "Hot_Cross_Bun__Eat__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Sp__Tile__Sit__F", "Hot_Cross_Bun__Eat__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Sp__Tile__Sit__S", "Hot_Cross_Bun__Eat__End", 0, nullptr, nullptr, nullptr},
@@ -109,7 +105,6 @@ Target targets[T_COUNT] = {
     {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "List`1"},
     {"Guest__Manager", "Account__User_Name", 2, nullptr, nullptr, nullptr},
     {"Data__Model", "File__Write__Name", 2, nullptr, nullptr, nullptr},
-    {"Player__Spr", "_Set", 1, nullptr, nullptr, nullptr},
 };
 
 // Overloads can share a name and an arity, so a target may also name the class

@@ -15,10 +15,11 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 - **Host tidak mengizinkan save world** — save tetap bisa dilakukan.
 - **Room ber-password** — bisa dimasuki tanpa mengetik password.
 - **Posisi skin sempit** — slider X/Y diperlebar ke -25..25.
-- **Makanan cepat habis** — sushi, hot cross bun, dan gingerbread tetap di tangan setelah
-  beberapa gigitan, jadi bisa dimakan sebanyak yang diinginkan, dan modelnya langsung tampil
-  lagi setelah makan. Es krim dan popsicle sengaja dibiarkan habis seperti biasa. Makanan yang
-  dimakan langsung dari piring tetap habis seperti vanilla.
+- **Makanan cepat habis** — hot cross bun dan gingerbread tetap di tangan setelah beberapa
+  gigitan, jadi bisa dimakan sebanyak yang diinginkan, dan modelnya langsung tampil lagi
+  setelah makan. Sushi, es krim, dan popsicle sengaja dibiarkan habis seperti biasa, karena
+  satu gigitan sudah menghabiskan itemnya. Makanan yang dimakan langsung dari piring tetap
+  habis seperti vanilla.
 - **Skin pemain lain tidak tersimpan** — setiap skin yang tampil disalin otomatis ke slot model
   kosong pertama, memakai penyimpanan model milik game sendiri, jadi skin itu langsung muncul
   di daftar model dan bisa dipakai. Nama pemain asalnya ikut ditulis ke slot itu, jadi skin

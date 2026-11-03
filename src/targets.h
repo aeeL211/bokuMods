@@ -29,10 +29,6 @@ enum TargetId {
     T_EAT_END_SIT_F,
     T_EAT_END_SIT_S,
     T_EAT_END_FOOD,
-    T_EAT_END_SUSHI_KNEEL,
-    T_EAT_END_SUSHI_SIT_F,
-    T_EAT_END_SUSHI_SIT_S,
-    T_EAT_END_SUSHI_FOOD,
     T_EAT_END_BUN_KNEEL,
     T_EAT_END_BUN_SIT_F,
     T_EAT_END_BUN_SIT_S,
@@ -85,7 +81,6 @@ enum TargetId {
     T_USER_SET_LOCAL_LIST,
     T_GUEST_NAME,
     T_DATA_MODEL_NAME,
-    T_SPR_SET,
     T_COUNT,
 };
 
