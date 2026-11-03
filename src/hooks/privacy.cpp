@@ -18,90 +18,75 @@ bool rowHook(void*, int, void*) { return true; }
 Field userSelectField = {};
 Field uidField = {};
 Field emailField = {};
-Field verifyAccountField = {};
-Field friendProfileAccountField = {};
-Field addFriendAccountField = {};
 
-// The email row formats whatever the fetched profile carried. A profile never
-// carries the email of another account, so an unblocked row would print
-// nothing. The account id stands in, so the row still shows a value.
-void emailHook(void* self, void* objs, void* labels, void* text, void* method) {
-    auto orig =
-        reinterpret_cast<void (*)(void*, void*, void*, void*, void*)>(target(T_ACCOUNT_EMAIL).orig);
-    if (!orig)
+using SetFn = void (*)(void*, void*, void*, void*, bool, void*);
+using SetLocalFn = void (*)(void*, void*, void*, void*);
+
+// A fetched profile never carries the email of another account, so every row
+// that prints it would stay blank. The account id stands in for it at the one
+// place a user object is built, so no screen depends on refresh order.
+void fillEmail(void* userRef) {
+    void* user = userRef ? *reinterpret_cast<void**>(userRef) : nullptr;
+    if (!user)
         return;
 
-    void* shown = text;
-    if (!shown || stringLength(shown) == 0) {
-        void* user = readPtr(self, userSelectField);
-        void* uid = user ? readPtr(user, uidField) : nullptr;
-        if (uid && stringLength(uid) > 0)
-            shown = uid;
-    }
-    orig(self, objs, labels, shown, method);
+    void* email = readPtr(user, emailField);
+    if (email && stringLength(email) > 0)
+        return;
+
+    void* uid = readPtr(user, uidField);
+    if (uid && stringLength(uid) > 0)
+        setRef(user, emailField, uid);
 }
 
-// The detail screens fill their email row straight from the selected user, not
-// through the formatter above. The account id is written for the duration of
-// the refresh, then the original value is put back.
-void refreshEmail(void* self, void (*orig)(void*, void*), void* method, const Field& accountField) {
-    void* account = readPtr(self, accountField);
-    void* user = readPtr(account, userSelectField);
-    void* saved = readPtr(user, emailField);
-    bool replaced = false;
-    if (user && stringLength(saved) == 0) {
-        void* uid = readPtr(user, uidField);
-        if (uid && stringLength(uid) > 0) {
-            setRef(user, emailField, uid);
-            replaced = true;
-        }
-    }
-
-    orig(self, method);
-
-    if (replaced)
-        setRef(user, emailField, saved);
-}
-
-void verifyRefreshHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_VERIFY_REFRESH).orig);
+void setHook(void* self, void* userRef, void* uid, void* docs, bool overwrite, void* method) {
+    auto orig = reinterpret_cast<SetFn>(target(T_USER_SET).orig);
     if (orig)
-        refreshEmail(self, orig, method, verifyAccountField);
+        orig(self, userRef, uid, docs, overwrite, method);
+    fillEmail(userRef);
 }
 
-void friendRefreshHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FRIEND_DETAIL_REFRESH).orig);
+// The three local setters differ only by the type of their second argument.
+void setLocal(TargetId id, void* self, void* userRef, void* data, void* method) {
+    auto orig = reinterpret_cast<SetLocalFn>(target(id).orig);
     if (orig)
-        refreshEmail(self, orig, method, friendProfileAccountField);
+        orig(self, userRef, data, method);
+    fillEmail(userRef);
 }
 
-void addFriendRefreshHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ADD_FRIEND_DETAIL_REFRESH).orig);
-    if (orig)
-        refreshEmail(self, orig, method, addFriendAccountField);
+void setStringHook(void* self, void* userRef, void* data, void* method) {
+    setLocal(T_USER_SET_LOCAL, self, userRef, data, method);
+}
+
+void setArrayHook(void* self, void* userRef, void* data, void* method) {
+    setLocal(T_USER_SET_LOCAL_ARRAY, self, userRef, data, method);
+}
+
+void setListHook(void* self, void* userRef, void* data, void* method) {
+    setLocal(T_USER_SET_LOCAL_LIST, self, userRef, data, method);
 }
 
 bool resolvePrivacyFields() {
     void* manager = classOf("Net__Account__Manager");
-    void* verifyDetail = classOf("Net__Account__Verify__Detail");
-    void* friendProfile = classOf("Net__Account__Friend_Profile");
-    void* addFriend = classOf("Net__Account__Add_Friend");
     return resolveField(manager, "user_Select", userSelectField) &&
            resolveField(fieldClass(userSelectField), "uid", uidField) &&
-           resolveField(fieldClass(userSelectField), "email", emailField) &&
-           resolveField(verifyDetail, "account", verifyAccountField) &&
-           resolveField(friendProfile, "account", friendProfileAccountField) &&
-           resolveField(addFriend, "account", addFriendAccountField);
+           resolveField(fieldClass(userSelectField), "email", emailField);
 }
 
 } // namespace
 
 void installPrivacyHooks() {
-    if (resolvePrivacyFields()) {
+    if (resolvePrivacyFields())
         LOGI("Privacy fields OK");
-    } else {
+    else
         LOGE("Privacy fields not found; a missing email stays blank");
-    }
+
+    const TargetId setters[] = {T_USER_SET, T_USER_SET_LOCAL, T_USER_SET_LOCAL_ARRAY,
+                                T_USER_SET_LOCAL_LIST};
+    int found = 0;
+    for (TargetId id : setters)
+        found += target(id).addr ? 1 : 0;
+    LOGI("Email setters: %d of 4", found);
 
     installHook(target(T_PRIVACY_MANAGER), reinterpret_cast<void*>(managerHook),
                 "Manager.Term__Privacy__Visible");
@@ -115,11 +100,11 @@ void installPrivacyHooks() {
                 "Verify.Term__Privacy__Visible");
     installHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(rowHook),
                 "Verify.Term__Privacy__Visible__Email");
-    installHook(target(T_ACCOUNT_EMAIL), reinterpret_cast<void*>(emailHook), "Manager.Email");
-    installHook(target(T_VERIFY_REFRESH), reinterpret_cast<void*>(verifyRefreshHook),
-                "Verify__Detail.Refresh");
-    installHook(target(T_FRIEND_DETAIL_REFRESH), reinterpret_cast<void*>(friendRefreshHook),
-                "Friend_Profile.Detail__Refresh");
-    installHook(target(T_ADD_FRIEND_DETAIL_REFRESH), reinterpret_cast<void*>(addFriendRefreshHook),
-                "Add_Friend.Detail__Refresh");
+    installHook(target(T_USER_SET), reinterpret_cast<void*>(setHook), "Manager.User__Set");
+    installHook(target(T_USER_SET_LOCAL), reinterpret_cast<void*>(setStringHook),
+                "Manager.User__Set__From_Local(string)");
+    installHook(target(T_USER_SET_LOCAL_ARRAY), reinterpret_cast<void*>(setArrayHook),
+                "Manager.User__Set__From_Local(string[])");
+    installHook(target(T_USER_SET_LOCAL_LIST), reinterpret_cast<void*>(setListHook),
+                "Manager.User__Set__From_Local(List)");
 }

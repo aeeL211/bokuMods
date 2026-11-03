@@ -53,7 +53,6 @@ Target targets[T_COUNT] = {
     {"Net__Account__Friend_Profile", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible", 1, nullptr, nullptr, nullptr},
     {"Net__Account__Verify", "Term__Privacy__Visible__Email", 1, nullptr, nullptr, nullptr},
-    {"Net__Account__Manager", "Email", 3, nullptr, nullptr, nullptr},
     {"Player__State__Cmn", "Term__Gun_Shoot__End__Update__End", 0, nullptr, nullptr, nullptr},
     {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__End__Update", 0, nullptr,
      nullptr, nullptr},
@@ -71,7 +70,6 @@ Target targets[T_COUNT] = {
      nullptr},
     {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__Action__Update", 0, nullptr,
      nullptr, nullptr},
-    {"Net__Account__Verify__Detail", "Refresh", 0, nullptr, nullptr, nullptr},
     {"Global", "Data__Load__Data_Slot_Num_", 3, nullptr, nullptr, nullptr},
     {"Player__State", "_Update", 0, nullptr, nullptr, nullptr},
     {"Player__State__Cmn", "Term__Gun_Shoot__Action__Update__End", 1, nullptr, nullptr, nullptr},
@@ -82,11 +80,13 @@ Target targets[T_COUNT] = {
     {"Player__State__Std__Action__Hh__Weapon", "Rockman__Rock_Buster__Action", 1, nullptr, nullptr,
      nullptr},
     {"Player__State__Cmn", "Rockman__Rock_Buster__End__Dir", 0, nullptr, nullptr, nullptr},
-    {"Net__Account__Friend_Profile", "Detail__Refresh", 0, nullptr, nullptr, nullptr},
-    {"Net__Account__Add_Friend", "Detail__Refresh", 0, nullptr, nullptr, nullptr},
     {"Player__State__Std__Air", "Tumble__Explode", 3, nullptr, nullptr, nullptr},
     {"Player__State__Std__Action__Hh__Nature", "Feces__Throw__Action", 1, nullptr, nullptr,
      nullptr},
+    {"Net__Account__Manager", "User__Set", 4, nullptr, nullptr, nullptr},
+    {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "String"},
+    {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "String[]"},
+    {"Net__Account__Manager", "User__Set__From_Local", 2, nullptr, nullptr, nullptr, "List`1"},
 };
 
 // Overloads can share a name and an arity, so a target may also name the class
