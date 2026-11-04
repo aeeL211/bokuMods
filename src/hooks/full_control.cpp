@@ -874,8 +874,7 @@ void resolveMsgLabel() {
     if (!resolveField(classOf("Net__Multi__Chat"), "msgs", chatMsgs))
         return;
     void* listClass = fieldClass(chatMsgs);
-    if (!resolveField(listClass, "_items", msgItems) ||
-        !resolveField(listClass, "_size", msgCount))
+    if (!resolveField(listClass, "_items", msgItems) || !resolveField(listClass, "_size", msgCount))
         return;
     void* msgClass = fieldElementClass(msgItems);
     if (!msgClass || !resolveField(msgClass, "c", msgObj))
