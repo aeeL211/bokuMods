@@ -10,214 +10,220 @@
 
 namespace {
 
-// The throw entry scales its speed with this, so the top of the range is the
-// strongest throw the piece can make.
-constexpr float kFullPower = 1.0f;
+// Entri lemparan menskalakan kecepatannya dengan nilai ini, jadi ujung atas
+// rentangnya adalah lemparan terkuat yang bisa dibuat kotoran.
+constexpr float kKekuatanPenuh = 1.0f;
 
-// The stock throw charges while the button is down and only fires on release,
-// so a held button needs a trigger of its own. The window matches the pistol
-// and the buster repeats.
-constexpr long long kThrowCadenceMs = 180;
+// Lemparan bawaan mengisi charge selama tombol ditekan dan hanya melepas saat
+// tombol dilepas, jadi tombol yang ditahan butuh pemicunya sendiri. Jendelanya
+// sama dengan pengulangan pistol dan buster.
+constexpr long long kIramaLemparMs = 180;
 
-Field managerField = {};
-Field managerStateField = {};
-Field managerThrowField = {};
-Field chargeField = {};
-Field chargeActiveField = {};
+Field fieldManajer = {};
+Field fieldStateManajer = {};
+Field fieldLemparManajer = {};
+Field fieldCharge = {};
+Field fieldChargeAktif = {};
 
-// Every player throws from its own state object, so the cadence, the last
-// throw direction and the charge frames follow the player manager.
-struct Throw {
-    void* manager;
-    long long lastMs;
-    bool up;
-    int chargeFrames;
+// Setiap pemain melempar dari objek state-nya sendiri, jadi irama, arah lempar
+// terakhir, dan frame charge mengikuti manajer pemain.
+struct Lemparan {
+    void* manajer;
+    long long terakhirMs;
+    bool keAtas;
+    int frameCharge;
 };
-constexpr int kThrowCount = 32;
-Throw throws[kThrowCount] = {};
-int nextThrow = 0;
+constexpr int kJumlahLemparan = 32;
+Lemparan daftarLemparan[kJumlahLemparan] = {};
+int lemparanBerikut = 0;
 
-long long nowMs() {
-    timespec now = {};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return static_cast<long long>(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
+long long sekarangMs() {
+    timespec sekarang = {};
+    clock_gettime(CLOCK_MONOTONIC, &sekarang);
+    return static_cast<long long>(sekarang.tv_sec) * 1000 + sekarang.tv_nsec / 1000000;
 }
 
-Throw& throwFor(void* manager) {
-    Throw* freeSlot = nullptr;
-    for (Throw& t : throws) {
-        if (t.manager == manager)
-            return t;
-        if (!t.manager && !freeSlot)
-            freeSlot = &t;
+Lemparan& lemparanUntuk(void* manajer) {
+    Lemparan* slotKosong = nullptr;
+    for (Lemparan& lemparan : daftarLemparan) {
+        if (lemparan.manajer == manajer)
+            return lemparan;
+        if (!lemparan.manajer && !slotKosong)
+            slotKosong = &lemparan;
     }
 
-    Throw& slot = freeSlot ? *freeSlot : throws[nextThrow];
-    nextThrow = (nextThrow + 1) % kThrowCount;
+    Lemparan& slot = slotKosong ? *slotKosong : daftarLemparan[lemparanBerikut];
+    lemparanBerikut = (lemparanBerikut + 1) % kJumlahLemparan;
     slot = {};
-    slot.manager = manager;
+    slot.manajer = manajer;
     return slot;
 }
 
-// True at most once per window, so a held button throws at a fixed rate.
-bool cadenceReady(Throw& t) {
-    long long now = nowMs();
-    if (now - t.lastMs < kThrowCadenceMs)
+// Bernilai benar paling sering sekali per jendela, jadi tombol yang ditahan
+// melempar dengan laju tetap.
+bool iramaSiap(Lemparan& lemparan) {
+    long long sekarang = sekarangMs();
+    if (sekarang - lemparan.terakhirMs < kIramaLemparMs)
         return false;
-    t.lastMs = now;
+    lemparan.terakhirMs = sekarang;
     return true;
 }
 
-// Records the direction of the throw that is starting and arms the cadence, so
-// the first repeat waits one window instead of landing on the stock throw.
-void markThrow(void* self, bool up) {
-    void* manager = readPtr(self, managerField);
-    if (!manager)
+// Mencatat arah lemparan yang sedang mulai dan memasang iramanya, jadi
+// pengulangan pertama menunggu satu jendela daripada menumpuk pada lemparan
+// bawaan.
+void tandaiLemparan(void* sendiri, bool keAtas) {
+    void* manajer = bacaPtr(sendiri, fieldManajer);
+    if (!manajer)
         return;
-    Throw& t = throwFor(manager);
-    t.up = up;
-    t.lastMs = nowMs();
-    t.chargeFrames = 0;
+    Lemparan& lemparan = lemparanUntuk(manajer);
+    lemparan.keAtas = keAtas;
+    lemparan.terakhirMs = sekarangMs();
+    lemparan.frameCharge = 0;
 }
 
-// The charge keeps the release handler armed, so it is dropped once the throw
-// already left the hand and the release would add a second one.
-void clearCharge(void* manager) {
-    void* state = readPtr(manager, managerStateField);
-    void* throwData = readPtr(state, managerThrowField);
-    void* charge = readPtr(throwData, chargeField);
+// Charge membuat penangan pelepasan tetap siap, jadi charge dibuang setelah
+// lemparan sudah meninggalkan tangan dan pelepasan akan menambah lemparan kedua.
+void kosongkanCharge(void* manajer) {
+    void* state = bacaPtr(manajer, fieldStateManajer);
+    void* dataLempar = bacaPtr(state, fieldLemparManajer);
+    void* charge = bacaPtr(dataLempar, fieldCharge);
     if (charge)
-        writeBool(charge, chargeActiveField, false);
+        tulisBool(charge, fieldChargeAktif, false);
 }
 
-// The standalone throw calls a single entry that takes the power, so the same
-// entry is reused for the repeat. The hidden method info is the one the scan
-// stored for that entry, because a body that reads it must not see a null.
-void throwNow(void* self, bool up) {
-    Target& entry = target(up ? T_FECES_ACTION_UP : T_FECES_ACTION_STD);
-    if (entry.addr)
-        reinterpret_cast<void (*)(void*, float, void*)>(entry.addr)(self, kFullPower, entry.method);
+// Lemparan mandiri memanggil satu entri yang menerima kekuatan, jadi entri yang
+// sama dipakai ulang untuk pengulangan. Method info tersembunyinya adalah yang
+// disimpan scan untuk entri itu, karena badan yang membacanya tidak boleh
+// melihat nilai null.
+void lemparSekarang(void* sendiri, bool keAtas) {
+    Target& entri = target(keAtas ? T_FECES_ACTION_UP : T_FECES_ACTION_STD);
+    if (entri.addr)
+        reinterpret_cast<void (*)(void*, float, void*)>(entri.addr)(sendiri, kKekuatanPenuh,
+                                                                    entri.method);
 }
 
-// The straight charge is entered from every aim, and the look-up one replaces it
-// when the player aims up, so the last charge entry is the direction the held
-// button has to repeat. Only a direction change re-arms the frame count, so a
-// fresh charge gets its aim settled without holding a repeated entry back.
-void setChargeDirection(void* self, bool up) {
-    void* manager = readPtr(self, managerField);
-    if (!manager)
+// Charge lurus dimasuki dari setiap bidikan, dan charge melihat ke atas
+// menggantikannya saat pemain membidik ke atas, jadi entri charge terakhir
+// adalah arah yang harus diulang tombol yang ditahan. Hanya perubahan arah yang
+// memasang ulang hitungan frame, jadi charge baru sempat menyelesaikan
+// bidikannya tanpa menahan entri yang berulang.
+void setelArahCharge(void* sendiri, bool keAtas) {
+    void* manajer = bacaPtr(sendiri, fieldManajer);
+    if (!manajer)
         return;
-    Throw& t = throwFor(manager);
-    if (t.up != up)
-        t.chargeFrames = 0;
-    t.up = up;
+    Lemparan& lemparan = lemparanUntuk(manajer);
+    if (lemparan.keAtas != keAtas)
+        lemparan.frameCharge = 0;
+    lemparan.keAtas = keAtas;
 }
 
-void chargeStdHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_STD).orig);
-    if (!orig)
+void hookChargeStd(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_STD).orig);
+    if (!asli)
         return;
-    orig(self, method);
-    setChargeDirection(self, false);
+    asli(sendiri, metode);
+    setelArahCharge(sendiri, false);
 }
 
-// The look-up charge has one caller, the input switch that runs while the
-// player aims up during a charge.
-void chargeUpHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UP).orig);
-    if (!orig)
+// Charge melihat ke atas hanya punya satu pemanggil, yaitu sakelar input yang
+// berjalan selama pemain membidik ke atas saat charge.
+void hookChargeUp(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UP).orig);
+    if (!asli)
         return;
-    orig(self, method);
-    setChargeDirection(self, true);
+    asli(sendiri, metode);
+    setelArahCharge(sendiri, true);
 }
 
-// The empty hand id at the end of the throw takes the piece out of the hands.
-// Keeping that change back leaves the piece in place, so the same one can fly
-// again, and the power is forced so every throw is the strongest.
-void actionStdHook(void* self, float, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_STD).orig);
-    if (!orig)
+// Id tangan kosong di akhir lemparan mengeluarkan kotoran dari tangan. Menahan
+// perubahan itu membuat kotorannya tetap di tempat, jadi kotoran yang sama bisa
+// terbang lagi, dan kekuatannya dipaksa supaya setiap lemparan terkuat.
+void hookAksiStd(void* sendiri, float, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_STD).orig);
+    if (!asli)
         return;
-    markThrow(self, false);
-    setKeepHand(true);
-    orig(self, kFullPower, method);
-    setKeepHand(false);
+    tandaiLemparan(sendiri, false);
+    setelTahanTangan(true);
+    asli(sendiri, kKekuatanPenuh, metode);
+    setelTahanTangan(false);
 }
 
-// The look-up throw needs the same treatment.
-void actionUpHook(void* self, float, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_UP).orig);
-    if (!orig)
+// Lemparan melihat ke atas butuh perlakuan yang sama.
+void hookAksiUp(void* sendiri, float, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, float, void*)>(target(T_FECES_ACTION_UP).orig);
+    if (!asli)
         return;
-    markThrow(self, true);
-    setKeepHand(true);
-    orig(self, kFullPower, method);
-    setKeepHand(false);
+    tandaiLemparan(sendiri, true);
+    setelTahanTangan(true);
+    asli(sendiri, kKekuatanPenuh, metode);
+    setelTahanTangan(false);
 }
 
-// Runs every frame the throw action is on screen, and the stock path ends that
-// action once the sprite reaches its last step. Starting the throw after it
-// throws again while the button is held.
-void throwUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_UPDATE).orig);
-    if (!orig)
+// Berjalan setiap frame selama aksi lempar ada di layar, dan jalur bawaan
+// mengakhiri aksi itu begitu sprite mencapai step terakhirnya. Memulai lemparan
+// setelahnya melempar lagi selama tombol ditahan.
+void hookUpdateLempar(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_UPDATE).orig);
+    if (!asli)
         return;
-    orig(self, method);
+    asli(sendiri, metode);
 
-    void* manager = readPtr(self, managerField);
-    if (!manager || !actionHeld(manager))
+    void* manajer = bacaPtr(sendiri, fieldManajer);
+    if (!manajer || !tombolAksiDitekan(manajer))
         return;
-    Throw& t = throwFor(manager);
-    if (cadenceReady(t))
-        throwNow(self, t.up);
+    Lemparan& lemparan = lemparanUntuk(manajer);
+    if (iramaSiap(lemparan))
+        lemparSekarang(sendiri, lemparan.keAtas);
 }
 
-// Runs every frame of the charge state. A held button throws at once instead of
-// waiting for the release, so the first throw of a hold lands like every repeat.
-// The aim switch runs on the next input pass, so the first charge frame only
-// counts and the throw starts one frame later with the settled direction.
-void chargeUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UPDATE).orig);
-    if (!orig)
+// Berjalan setiap frame state charge. Tombol yang ditahan langsung melempar
+// daripada menunggu pelepasan, jadi lemparan pertama saat tombol ditahan jatuh
+// sama seperti setiap pengulangan. Sakelar bidikan berjalan pada lintasan input
+// berikutnya, jadi frame charge pertama hanya menghitung dan lemparan mulai
+// satu frame kemudian dengan arah yang sudah mantap.
+void hookUpdateCharge(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_FECES_CHARGE_UPDATE).orig);
+    if (!asli)
         return;
-    orig(self, method);
+    asli(sendiri, metode);
 
-    void* manager = readPtr(self, managerField);
-    if (!manager || !actionHeld(manager))
+    void* manajer = bacaPtr(sendiri, fieldManajer);
+    if (!manajer || !tombolAksiDitekan(manajer))
         return;
-    Throw& t = throwFor(manager);
-    if (t.chargeFrames == 0) {
-        t.chargeFrames = 1;
+    Lemparan& lemparan = lemparanUntuk(manajer);
+    if (lemparan.frameCharge == 0) {
+        lemparan.frameCharge = 1;
         return;
     }
-    if (!cadenceReady(t))
+    if (!iramaSiap(lemparan))
         return;
-    clearCharge(manager);
-    throwNow(self, t.up);
+    kosongkanCharge(manajer);
+    lemparSekarang(sendiri, lemparan.keAtas);
 }
 
-bool resolveFecesFields() {
-    void* manager = classOf("Player__Manager");
-    return resolveField(classOf("Player__State__Std__Action__Hh__Nature"), "m", managerField) &&
-           resolveField(manager, "__state", managerStateField) &&
-           resolveField(fieldClass(managerStateField), "_throw", managerThrowField) &&
-           resolveField(fieldClass(managerThrowField), "charge", chargeField) &&
-           resolveField(fieldClass(chargeField), "active", chargeActiveField);
+bool cariFieldKotoran() {
+    void* manajer = kelasDari("Player__Manager");
+    return cariField(kelasDari("Player__State__Std__Action__Hh__Nature"), "m", fieldManajer) &&
+           cariField(manajer, "__state", fieldStateManajer) &&
+           cariField(kelasField(fieldStateManajer), "_throw", fieldLemparManajer) &&
+           cariField(kelasField(fieldLemparManajer), "charge", fieldCharge) &&
+           cariField(kelasField(fieldCharge), "active", fieldChargeAktif);
 }
 
 } // namespace
 
-void installFecesHooks() {
-    if (!resolveFecesFields()) {
-        LOGE("Feces fields not found; the throw stays stock");
+void pasangHookKotoran() {
+    if (!cariFieldKotoran()) {
+        LOGE("Field kotoran tidak ditemukan; lemparan tetap vanilla");
         return;
     }
-    LOGI("Feces fields OK");
+    LOGI("Field kotoran siap");
 
-    installHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(chargeUpdateHook));
-    installHook(target(T_FECES_CHARGE_STD), reinterpret_cast<void*>(chargeStdHook));
-    installHook(target(T_FECES_CHARGE_UP), reinterpret_cast<void*>(chargeUpHook));
-    installHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(throwUpdateHook));
-    installHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(actionStdHook));
-    installHook(target(T_FECES_ACTION_UP), reinterpret_cast<void*>(actionUpHook));
+    pasangHook(target(T_FECES_CHARGE_UPDATE), reinterpret_cast<void*>(hookUpdateCharge));
+    pasangHook(target(T_FECES_CHARGE_STD), reinterpret_cast<void*>(hookChargeStd));
+    pasangHook(target(T_FECES_CHARGE_UP), reinterpret_cast<void*>(hookChargeUp));
+    pasangHook(target(T_FECES_UPDATE), reinterpret_cast<void*>(hookUpdateLempar));
+    pasangHook(target(T_FECES_ACTION_STD), reinterpret_cast<void*>(hookAksiStd));
+    pasangHook(target(T_FECES_ACTION_UP), reinterpret_cast<void*>(hookAksiUp));
 }

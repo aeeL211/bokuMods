@@ -4,21 +4,21 @@
 
 #include <cstddef>
 
-// JNI is used by the log path, the toasts and the version suffix, so the VM
-// handle and the UnityPlayer class live outside the logging guard.
-JavaVM* javaVm();
-void setJavaVm(JavaVM* vm);
+// JNI dipakai oleh jalur log, toast dan sufiks versi, jadi pegangan VM dan kelas
+// UnityPlayer berada di luar guard pencatatan.
+JavaVM* vmJava();
+void setelVmJava(JavaVM* vm);
 
-jclass unityPlayer();
-void cacheUnityPlayer(JNIEnv* env);
+jclass kelasUnityPlayer();
+void simpanKelasUnityPlayer(JNIEnv* env);
 
-JavaVM* findJavaVm();
-bool attachJni(JNIEnv** env, bool* detach);
+JavaVM* cariVmJava();
+bool lekatJni(JNIEnv** env, bool* lepas);
 
-// getExternalStorageDirectory is the only root that also works for paths owned
-// by another app, so both the log fallback and the name file use it.
-bool externalStorageRoot(char* out, size_t size);
+// getExternalStorageDirectory adalah satu-satunya akar yang juga bekerja untuk
+// path milik aplikasi lain, jadi cadangan log dan berkas nama sama-sama memakainya.
+bool akarPenyimpananEksternal(char* out, size_t size);
 
-// The package name comes from /proc/self/cmdline instead of being written into
-// the source, so a renamed or cloned game still finds its own files.
-bool appPackage(char* out, size_t size);
+// Nama paket diambil dari /proc/self/cmdline, bukan ditulis ke dalam sumber, jadi
+// game yang diganti nama atau dikloning tetap menemukan berkasnya sendiri.
+bool paketAplikasi(char* out, size_t size);

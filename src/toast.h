@@ -1,4 +1,4 @@
 #pragma once
 
-void toast(const char* text);
-void loginToast();
+void tampilkanToast(const char* teks);
+void toastMasuk();

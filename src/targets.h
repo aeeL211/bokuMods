@@ -17,12 +17,13 @@ struct Target {
 
 Target& target(TargetId id);
 
-// Decrypts the target names with the basename of the library that was actually
-// loaded. A renamed copy derives a different key, so the names come out wrong
-// and scan() resolves nothing. Returns false when the basename is not the one
-// the table was built for.
-bool initTargets(const char* libraryName);
+// Mendekripsi nama target dengan nama dasar pustaka yang benar-benar dimuat. Salinan
+// yang diganti nama menurunkan kunci yang berbeda, jadi namanya keluar salah dan
+// scan() tidak menemukan apa pun. Mengembalikan false bila nama dasar itu bukan yang
+// dipakai saat tabel dibangun.
+bool inisialisasiTarget(const char* namaPustaka);
 
-// Resolves every target by class name, method name and parameter count.
-// Returns how many were found, which is T_COUNT on a healthy startup.
+// Mencari setiap target berdasarkan nama kelas, nama method, dan jumlah parameter.
+// Mengembalikan berapa yang ditemukan, yang bernilai T_COUNT bila semuanya berjalan
+// sehat.
 int scan();

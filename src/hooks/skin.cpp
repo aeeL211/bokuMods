@@ -13,237 +13,242 @@
 
 namespace {
 
-// A model string is a few hundred separated fields. The cap only stops a
-// corrupt length from walking past the string.
-constexpr int32_t kMaxModelChars = 16384;
-constexpr size_t kMaxModelBytes = static_cast<size_t>(kMaxModelChars) * 3 + 1;
-// One entry per distinct skin a session can show; a repeat costs one compare.
-constexpr int kMaxHashes = 512;
-constexpr int kMaxSlot = 1000;
-constexpr size_t kMaxPathBytes = 1024;
-// A user id is short; a longer one is not worth a map entry.
-constexpr size_t kMaxUserBytes = 64;
+// String model berisi beberapa ratus field yang dipisah. Batas ini hanya
+// menghentikan panjang yang rusak agar tidak berjalan melewati string.
+constexpr int32_t kBatasKarakterModel = 16384;
+constexpr size_t kBatasByteModel = static_cast<size_t>(kBatasKarakterModel) * 3 + 1;
+// Satu entri per skin berbeda yang bisa tampil dalam satu sesi; pengulangan hanya
+// memakan satu perbandingan.
+constexpr int kBatasHash = 512;
+constexpr int kBatasSlot = 1000;
+constexpr size_t kBatasBytePath = 1024;
+// Id pengguna itu pendek; yang lebih panjang tidak layak jadi entri map.
+constexpr size_t kBatasBytePengguna = 64;
 
-char modelText[kMaxModelBytes];
-char pathText[kMaxPathBytes];
-char fileText[kMaxModelBytes];
+char teksModel[kBatasByteModel];
+char teksPath[kBatasBytePath];
+char teksBerkas[kBatasByteModel];
 
-uint64_t modelHashes[kMaxHashes];
-int modelHashCount = 0;
-int nextSlot = 1;
-bool slotReady = false;
+uint64_t hashModel[kBatasHash];
+int jumlahHashModel = 0;
+int slotBerikut = 1;
+bool slotSiap = false;
 
-// A saved slot and the user it came from, so the display name that arrives
-// later can be written next to the model it belongs to.
-struct UserSlot {
-    char user[kMaxUserBytes];
+// Slot yang tersimpan dan pengguna asalnya, supaya nama tampilan yang datang
+// belakangan bisa ditulis di samping model miliknya.
+struct SlotPengguna {
+    char pengguna[kBatasBytePengguna];
     int slot;
 };
 
-UserSlot userSlots[kMaxHashes];
-int userSlotCount = 0;
+SlotPengguna daftarSlotPengguna[kBatasHash];
+int jumlahSlotPengguna = 0;
 
-Field guestA = {};
-Field managerData = {};
-Field dataManagerModel = {};
-Field modelFilename = {};
-bool fieldsReady = false;
-bool notReadyLogged = false;
+Field fieldTamu = {};
+Field fieldDataManajer = {};
+Field fieldModel = {};
+Field fieldNamaBerkas = {};
+bool fieldSiap = false;
+bool sudahCatatTidakSiap = false;
 
-uint64_t hashText(const char* text, size_t len) {
-    uint64_t hash = 1469598103934665603ull;
-    for (size_t i = 0; i < len; i++) {
-        hash ^= static_cast<uint8_t>(text[i]);
-        hash *= 1099511628211ull;
+uint64_t hashTeks(const char* teks, size_t panjang) {
+    uint64_t hasil = 1469598103934665603ull;
+    for (size_t i = 0; i < panjang; i++) {
+        hasil ^= static_cast<uint8_t>(teks[i]);
+        hasil *= 1099511628211ull;
     }
-    return hash;
+    return hasil;
 }
 
-bool seenHash(uint64_t hash) {
-    for (int i = 0; i < modelHashCount; i++) {
-        if (modelHashes[i] == hash)
+bool hashTercatat(uint64_t nilai) {
+    for (int i = 0; i < jumlahHashModel; i++) {
+        if (hashModel[i] == nilai)
             return true;
     }
     return false;
 }
 
-void rememberHash(uint64_t hash) {
-    if (modelHashCount < kMaxHashes)
-        modelHashes[modelHashCount++] = hash;
+void catatHash(uint64_t nilai) {
+    if (jumlahHashModel < kBatasHash)
+        hashModel[jumlahHashModel++] = nilai;
 }
 
-// The model folder belongs to the same Manager that holds the guest list, so
-// the game's own writer lands the file in Save/Model without any path guess.
-// Its file names live in a holder that a half-built store does not have yet,
-// and the path builder dereferences it, so that store is reported as absent.
-void* dataModel(void* guestManager) {
-    if (!fieldsReady)
+// Folder model dimiliki Manager yang sama dengan pemegang daftar tamu, jadi
+// penulis milik game sendiri menaruh berkasnya di Save/Model tanpa menebak path.
+// Nama berkasnya ada di pemegang yang belum dimiliki penyimpanan setengah jadi,
+// dan pembangun path melakukan dereference ke sana, jadi penyimpanan seperti itu
+// dilaporkan tidak ada.
+void* modelData(void* manajerTamu) {
+    if (!fieldSiap)
         return nullptr;
-    void* manager = readPtr(guestManager, guestA);
-    void* data = readPtr(manager, managerData);
-    void* model = readPtr(data, dataManagerModel);
-    return readPtr(model, modelFilename) ? model : nullptr;
+    void* manajer = bacaPtr(manajerTamu, fieldTamu);
+    void* data = bacaPtr(manajer, fieldDataManajer);
+    void* model = bacaPtr(data, fieldModel);
+    return bacaPtr(model, fieldNamaBerkas) ? model : nullptr;
 }
 
-// The game's own path for a model slot, so the layout is never guessed here.
-bool slotPath(void* model, int slot) {
-    auto fn = reinterpret_cast<void* (*)(void*, int32_t, void*)>(target(T_DATA_MODEL_PATH).addr);
-    return fn &&
-           toUtf8(fn(model, slot, target(T_DATA_MODEL_PATH).method), pathText, sizeof(pathText));
+// Path milik game sendiri untuk sebuah slot model, jadi tata letaknya tidak
+// pernah ditebak di sini.
+bool pathSlot(void* model, int slot) {
+    auto panggil =
+        reinterpret_cast<void* (*)(void*, int32_t, void*)>(target(T_DATA_MODEL_PATH).addr);
+    return panggil && keUtf8(panggil(model, slot, target(T_DATA_MODEL_PATH).method), teksPath,
+                             sizeof(teksPath));
 }
 
-bool slotExists(void* model, int slot) {
-    return slotPath(model, slot) && access(pathText, F_OK) == 0;
+bool slotAda(void* model, int slot) {
+    return pathSlot(model, slot) && access(teksPath, F_OK) == 0;
 }
 
-void writeSlot(void* model, int slot, void* text) {
-    auto fn =
+void tulisSlot(void* model, int slot, void* text) {
+    auto panggil =
         reinterpret_cast<void (*)(void*, int32_t, void*, void*)>(target(T_DATA_MODEL_WRITE).addr);
-    if (fn)
-        fn(model, slot, text, target(T_DATA_MODEL_WRITE).method);
+    if (panggil)
+        panggil(model, slot, text, target(T_DATA_MODEL_WRITE).method);
 }
 
-// The game writes the display name of its own models the same way, so the slot
-// gets the usual Name.txt next to Data.txt.
-void writeNameSlot(void* model, int slot, void* text) {
-    auto fn =
+// Game menulis nama tampilan modelnya sendiri dengan cara yang sama, jadi slot
+// mendapat Name.txt biasa di samping Data.txt.
+void tulisNamaSlot(void* model, int slot, void* text) {
+    auto panggil =
         reinterpret_cast<void (*)(void*, int32_t, void*, void*)>(target(T_DATA_MODEL_NAME).addr);
-    if (fn)
-        fn(model, slot, text, target(T_DATA_MODEL_NAME).method);
+    if (panggil)
+        panggil(model, slot, text, target(T_DATA_MODEL_NAME).method);
 }
 
-// A skin from an earlier session already owns its slot, so the hash of every
-// Data.txt on disk is loaded once and the next write continues after them.
-bool readSlot(void* model, int slot) {
-    if (!slotPath(model, slot))
+// Skin dari sesi sebelumnya sudah memiliki slotnya, jadi hash setiap Data.txt di
+// disk dimuat sekali dan penulisan berikutnya melanjutkan setelahnya.
+bool bacaSlot(void* model, int slot) {
+    if (!pathSlot(model, slot))
         return false;
-    int fd = open(pathText, O_RDONLY | O_CLOEXEC);
+    int fd = open(teksPath, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return false;
-    ssize_t n = read(fd, fileText, sizeof(fileText) - 1);
+    ssize_t n = read(fd, teksBerkas, sizeof(teksBerkas) - 1);
     close(fd);
     if (n > 0)
-        rememberHash(hashText(fileText, static_cast<size_t>(n)));
+        catatHash(hashTeks(teksBerkas, static_cast<size_t>(n)));
     return true;
 }
 
-void seedSlots(void* model) {
+void isiSlotAwal(void* model) {
     int slot = 1;
-    while (slot <= kMaxSlot && readSlot(model, slot))
+    while (slot <= kBatasSlot && bacaSlot(model, slot))
         slot++;
-    nextSlot = slot;
-    LOGI("Skin slots: %d saved, next %d", modelHashCount, nextSlot);
+    slotBerikut = slot;
+    LOGI("Slot skin: %d tersimpan, berikutnya %d", jumlahHashModel, slotBerikut);
 }
 
-// Every guest arrives with the string the game itself stores in Data.txt, so
-// one copy per distinct skin goes into the first free model slot. The slot is
-// returned so the name can be attached once the profile arrives.
-int saveModel(void* guestManager, void* modelStr) {
-    if (!fieldsReady || !modelStr)
+// Setiap tamu datang dengan string yang disimpan game sendiri di Data.txt, jadi
+// satu salinan per skin berbeda masuk ke slot model kosong pertama. Slot itu
+// dikembalikan supaya namanya bisa ditempelkan begitu profil tiba.
+int simpanModel(void* manajerTamu, void* modelStr) {
+    if (!fieldSiap || !modelStr)
         return 0;
-    void* model = dataModel(guestManager);
+    void* model = modelData(manajerTamu);
     if (!model) {
-        if (fieldsReady && !notReadyLogged) {
-            notReadyLogged = true;
-            LOGE("Skin model not ready, skins from this point are skipped");
+        if (fieldSiap && !sudahCatatTidakSiap) {
+            sudahCatatTidakSiap = true;
+            LOGE("Model skin belum siap, skin setelah ini dilewati");
         }
         return 0;
     }
-    if (!toUtf8(modelStr, modelText, sizeof(modelText)))
+    if (!keUtf8(modelStr, teksModel, sizeof(teksModel)))
         return 0;
 
-    if (!slotReady) {
-        slotReady = true;
-        seedSlots(model);
+    if (!slotSiap) {
+        slotSiap = true;
+        isiSlotAwal(model);
     }
-    uint64_t hash = hashText(modelText, strlen(modelText));
-    if (seenHash(hash))
+    uint64_t nilai = hashTeks(teksModel, strlen(teksModel));
+    if (hashTercatat(nilai))
         return 0;
-    if (nextSlot > kMaxSlot) {
-        LOGE("Skin slots full, %d skins kept", modelHashCount);
+    if (slotBerikut > kBatasSlot) {
+        LOGE("Slot skin penuh, %d skin tersimpan", jumlahHashModel);
         return 0;
     }
 
-    writeSlot(model, nextSlot, modelStr);
-    if (!slotExists(model, nextSlot)) {
-        LOGE("Skin write failed: slot %d", nextSlot);
+    tulisSlot(model, slotBerikut, modelStr);
+    if (!slotAda(model, slotBerikut)) {
+        LOGE("Penulisan skin gagal: slot %d", slotBerikut);
         return 0;
     }
-    rememberHash(hash);
-    LOGI("Skin saved: slot %d (%zu bytes)", nextSlot, strlen(modelText));
-    return nextSlot++;
+    catatHash(nilai);
+    LOGI("Skin tersimpan: slot %d (%zu byte)", slotBerikut, strlen(teksModel));
+    return slotBerikut++;
 }
 
-void rememberUser(void* user, int slot) {
-    char text[kMaxUserBytes];
-    if (userSlotCount >= kMaxHashes || !toUtf8(user, text, sizeof(text)))
+void catatPengguna(void* user, int slot) {
+    char teks[kBatasBytePengguna];
+    if (jumlahSlotPengguna >= kBatasHash || !keUtf8(user, teks, sizeof(teks)))
         return;
-    memcpy(userSlots[userSlotCount].user, text, strlen(text) + 1);
-    userSlots[userSlotCount].slot = slot;
-    userSlotCount++;
+    memcpy(daftarSlotPengguna[jumlahSlotPengguna].pengguna, teks, strlen(teks) + 1);
+    daftarSlotPengguna[jumlahSlotPengguna].slot = slot;
+    jumlahSlotPengguna++;
 }
 
-// The guest carries the profile name only after the join handshake, so the name
-// is written here, to every slot that user's models were saved under.
-void writeUserName(void* guestManager, void* user, void* name) {
-    char text[kMaxUserBytes];
-    if (!fieldsReady || !name || stringLength(name) == 0 || !toUtf8(user, text, sizeof(text)))
+// Tamu membawa nama profil hanya setelah handshake join, jadi nama ditulis di
+// sini, ke setiap slot tempat model pengguna itu disimpan.
+void tulisNamaPengguna(void* manajerTamu, void* user, void* name) {
+    char teks[kBatasBytePengguna];
+    if (!fieldSiap || !name || panjangString(name) == 0 || !keUtf8(user, teks, sizeof(teks)))
         return;
-    void* model = dataModel(guestManager);
+    void* model = modelData(manajerTamu);
     if (!model)
         return;
 
-    for (int i = 0; i < userSlotCount; i++) {
-        if (strcmp(userSlots[i].user, text))
+    for (int i = 0; i < jumlahSlotPengguna; i++) {
+        if (strcmp(daftarSlotPengguna[i].pengguna, teks))
             continue;
-        writeNameSlot(model, userSlots[i].slot, name);
-        LOGI("Skin name: slot %d", userSlots[i].slot);
+        tulisNamaSlot(model, daftarSlotPengguna[i].slot, name);
+        LOGI("Nama skin: slot %d", daftarSlotPengguna[i].slot);
     }
 }
 
-using AddFn = void (*)(void*, void*, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, void*,
-                       void*, void*, void*, void*, bool, bool, bool, bool, bool, bool, void*);
+using FnTambah = void (*)(void*, void*, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, void*,
+                          void*, void*, void*, void*, bool, bool, bool, bool, bool, bool, void*);
 
-// The guest list is built from this one call on both host and client, and its
-// Model argument is the full skin string, so nothing has to be parsed here.
-void addHook(void* self, void* user, int32_t z, int32_t x, int32_t y, int32_t dir, int32_t s,
-             int32_t obj, void* key, void* dollName, void* parent, void* model, void* ping,
-             bool build, bool detonate, bool saveWorld, bool dollInteract, bool dollMove,
-             bool dollSetting, void* method) {
-    int slot = saveModel(self, model);
+// Daftar tamu dibangun dari satu panggilan ini di host maupun client, dan
+// argumen Model-nya adalah string skin penuh, jadi tidak ada yang perlu diurai
+// di sini.
+void hookTambah(void* self, void* user, int32_t z, int32_t x, int32_t y, int32_t dir, int32_t s,
+                int32_t obj, void* key, void* dollName, void* parent, void* model, void* ping,
+                bool build, bool detonate, bool saveWorld, bool dollInteract, bool dollMove,
+                bool dollSetting, void* method) {
+    int slot = simpanModel(self, model);
     if (slot)
-        rememberUser(user, slot);
+        catatPengguna(user, slot);
 
-    auto orig = reinterpret_cast<AddFn>(target(T_GUEST_ADD).orig);
-    if (orig)
-        orig(self, user, z, x, y, dir, s, obj, key, dollName, parent, model, ping, build, detonate,
+    auto asli = reinterpret_cast<FnTambah>(target(T_GUEST_ADD).orig);
+    if (asli)
+        asli(self, user, z, x, y, dir, s, obj, key, dollName, parent, model, ping, build, detonate,
              saveWorld, dollInteract, dollMove, dollSetting, method);
 }
 
-using NameFn = void (*)(void*, void*, void*, void*);
+using FnNama = void (*)(void*, void*, void*, void*);
 
-// The profile arrives after the join, so the display name is written to the
-// slots that guest's models were saved under.
-void nameHook(void* self, void* user, void* name, void* method) {
-    auto orig = reinterpret_cast<NameFn>(target(T_GUEST_NAME).orig);
-    if (orig)
-        orig(self, user, name, method);
-    writeUserName(self, user, name);
+// Profil datang setelah join, jadi nama tampilan ditulis ke slot tempat model
+// tamu itu disimpan.
+void hookNama(void* self, void* user, void* name, void* method) {
+    auto asli = reinterpret_cast<FnNama>(target(T_GUEST_NAME).orig);
+    if (asli)
+        asli(self, user, name, method);
+    tulisNamaPengguna(self, user, name);
 }
 
 } // namespace
 
-void installSkinHooks() {
-    void* guestClass = classOf("Guest__Manager");
-    fieldsReady = resolveField(guestClass, "a", guestA);
-    void* managerClass = fieldsReady ? fieldClass(guestA) : nullptr;
-    fieldsReady = fieldsReady && resolveField(managerClass, "data", managerData);
-    void* dataClass = fieldsReady ? fieldClass(managerData) : nullptr;
-    fieldsReady = fieldsReady && resolveField(dataClass, "model", dataManagerModel);
-    void* modelClass = fieldsReady ? fieldClass(dataManagerModel) : nullptr;
-    fieldsReady = fieldsReady && resolveField(modelClass, "_filename", modelFilename);
-    LOGI("Skin model fields %s", fieldsReady ? "OK" : "missing, skins stay untouched");
+void pasangHookSkin() {
+    void* kelasTamu = kelasDari("Guest__Manager");
+    fieldSiap = cariField(kelasTamu, "a", fieldTamu);
+    void* kelasManajer = fieldSiap ? kelasField(fieldTamu) : nullptr;
+    fieldSiap = fieldSiap && cariField(kelasManajer, "data", fieldDataManajer);
+    void* kelasData = fieldSiap ? kelasField(fieldDataManajer) : nullptr;
+    fieldSiap = fieldSiap && cariField(kelasData, "model", fieldModel);
+    void* kelasModel = fieldSiap ? kelasField(fieldModel) : nullptr;
+    fieldSiap = fieldSiap && cariField(kelasModel, "_filename", fieldNamaBerkas);
+    LOGI("Field model skin %s", fieldSiap ? "OK" : "tidak ada, skin tidak disentuh");
 
-    installHook(target(T_GUEST_ADD), reinterpret_cast<void*>(addHook));
-    installHook(target(T_GUEST_NAME), reinterpret_cast<void*>(nameHook));
+    pasangHook(target(T_GUEST_ADD), reinterpret_cast<void*>(hookTambah));
+    pasangHook(target(T_GUEST_NAME), reinterpret_cast<void*>(hookNama));
 }

@@ -9,96 +9,97 @@
 
 namespace {
 
-JavaVM* cachedVm = nullptr;
-jclass playerClass = nullptr;
+JavaVM* vmTersimpan = nullptr;
+jclass kelasUnity = nullptr;
 
 } // namespace
 
-JavaVM* javaVm() { return cachedVm; }
+JavaVM* vmJava() { return vmTersimpan; }
 
-void setJavaVm(JavaVM* vm) { cachedVm = vm; }
+void setelVmJava(JavaVM* vm) { vmTersimpan = vm; }
 
-jclass unityPlayer() { return playerClass; }
+jclass kelasUnityPlayer() { return kelasUnity; }
 
-void cacheUnityPlayer(JNIEnv* env) {
-    jclass unity = env->FindClass("com.unity3d.player.UnityPlayer");
-    if (unity) {
-        playerClass = static_cast<jclass>(env->NewGlobalRef(unity));
-        env->DeleteLocalRef(unity);
+void simpanKelasUnityPlayer(JNIEnv* env) {
+    jclass kelas = env->FindClass("com.unity3d.player.UnityPlayer");
+    if (kelas) {
+        kelasUnity = static_cast<jclass>(env->NewGlobalRef(kelas));
+        env->DeleteLocalRef(kelas);
     }
     if (env->ExceptionCheck())
         env->ExceptionClear();
 }
 
-JavaVM* findJavaVm() {
-    if (cachedVm)
-        return cachedVm;
+JavaVM* cariVmJava() {
+    if (vmTersimpan)
+        return vmTersimpan;
     typedef jint (*GetVms)(JavaVM**, jsize, jsize*);
-    auto created = reinterpret_cast<GetVms>(dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs"));
-    if (!created)
+    auto ambilVm = reinterpret_cast<GetVms>(dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs"));
+    if (!ambilVm)
         return nullptr;
     JavaVM* vm = nullptr;
-    jsize count = 0;
-    if (created(&vm, 1, &count) != JNI_OK || count < 1)
+    jsize jumlah = 0;
+    if (ambilVm(&vm, 1, &jumlah) != JNI_OK || jumlah < 1)
         return nullptr;
-    cachedVm = vm;
+    vmTersimpan = vm;
     return vm;
 }
 
-bool attachJni(JNIEnv** env, bool* detach) {
-    JavaVM* vm = findJavaVm();
+bool lekatJni(JNIEnv** env, bool* lepas) {
+    JavaVM* vm = cariVmJava();
     if (!vm)
         return false;
-    *detach = false;
+    *lepas = false;
     if (vm->GetEnv(reinterpret_cast<void**>(env), JNI_VERSION_1_6) == JNI_OK)
         return true;
     if (vm->AttachCurrentThread(env, nullptr) != JNI_OK)
         return false;
-    *detach = true;
+    *lepas = true;
     return true;
 }
 
-bool externalStorageRoot(char* out, size_t size) {
+bool akarPenyimpananEksternal(char* out, size_t size) {
     JNIEnv* env = nullptr;
-    bool detach = false;
-    if (!attachJni(&env, &detach))
+    bool lepas = false;
+    if (!lekatJni(&env, &lepas))
         return false;
 
-    bool ok = false;
-    jclass envClass = env->FindClass("android/os/Environment");
-    if (envClass) {
-        jmethodID get =
-            env->GetStaticMethodID(envClass, "getExternalStorageDirectory", "()Ljava/io/File;");
-        if (get) {
-            jobject root = env->CallStaticObjectMethod(envClass, get);
-            if (root) {
-                jclass fileClass = env->FindClass("java/io/File");
-                jmethodID getPath = fileClass ? env->GetMethodID(fileClass, "getAbsolutePath",
-                                                                 "()Ljava/lang/String;")
-                                              : nullptr;
+    bool berhasil = false;
+    jclass kelasEnv = env->FindClass("android/os/Environment");
+    if (kelasEnv) {
+        jmethodID metodeAkar = env->GetStaticMethodID(kelasEnv, "getExternalStorageDirectory",
+                                                      "()Ljava/io/File;");
+        if (metodeAkar) {
+            jobject akar = env->CallStaticObjectMethod(kelasEnv, metodeAkar);
+            if (akar) {
+                jclass kelasFile = env->FindClass("java/io/File");
+                jmethodID metodePath = kelasFile ? env->GetMethodID(kelasFile, "getAbsolutePath",
+                                                                    "()Ljava/lang/String;")
+                                                 : nullptr;
                 jstring path =
-                    getPath ? static_cast<jstring>(env->CallObjectMethod(root, getPath)) : nullptr;
+                    metodePath ? static_cast<jstring>(env->CallObjectMethod(akar, metodePath))
+                               : nullptr;
                 if (path) {
-                    const char* chars = env->GetStringUTFChars(path, nullptr);
-                    if (chars) {
-                        snprintf(out, size, "%s", chars);
-                        ok = true;
-                        env->ReleaseStringUTFChars(path, chars);
+                    const char* karakter = env->GetStringUTFChars(path, nullptr);
+                    if (karakter) {
+                        snprintf(out, size, "%s", karakter);
+                        berhasil = true;
+                        env->ReleaseStringUTFChars(path, karakter);
                     }
                     env->DeleteLocalRef(path);
                 }
-                env->DeleteLocalRef(root);
+                env->DeleteLocalRef(akar);
             }
         }
     }
     if (env->ExceptionCheck())
         env->ExceptionClear();
-    if (detach)
-        findJavaVm()->DetachCurrentThread();
-    return ok;
+    if (lepas)
+        cariVmJava()->DetachCurrentThread();
+    return berhasil;
 }
 
-bool appPackage(char* out, size_t size) {
+bool paketAplikasi(char* out, size_t size) {
     int fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return false;
@@ -109,11 +110,11 @@ bool appPackage(char* out, size_t size) {
         return false;
     buffer[n] = '\0';
 
-    // A secondary process appends ":name" to the package, so only the part
-    // before the colon belongs to the app dir.
-    char* colon = strchr(buffer, ':');
-    if (colon)
-        *colon = '\0';
+    // Proses sekunder menambahkan ":name" pada nama paket, jadi hanya bagian
+    // sebelum titik dua yang termasuk direktori aplikasi.
+    char* titikDua = strchr(buffer, ':');
+    if (titikDua)
+        *titikDua = '\0';
     size_t len = strlen(buffer);
     if (len == 0 || len >= size)
         return false;

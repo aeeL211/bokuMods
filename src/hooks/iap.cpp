@@ -10,40 +10,40 @@
 
 namespace {
 
-Field uiRef = {};
-void* iapClass = nullptr;
+Field fieldUi = {};
+void* kelasIap = nullptr;
 
-void* iapUi() {
-    if (!iapClass || !uiRef.field)
+void* uiIap() {
+    if (!kelasIap || !fieldUi.field)
         return nullptr;
-    void* base = staticFieldData(iapClass);
-    if (!base)
+    void* dasar = dataFieldStatis(kelasIap);
+    if (!dasar)
         return nullptr;
-    return *reinterpret_cast<void**>(reinterpret_cast<char*>(base) + uiRef.offset);
+    return *reinterpret_cast<void**>(reinterpret_cast<char*>(dasar) + fieldUi.offset);
 }
 
-// Skip Play Billing entirely: hand the product id to the game's own completion
-// path, which is what the store callback would have called. UI__Iap._Update
-// then grants the candy on the next frame.
-void buyHook(int32_t productId, void* method) {
-    void* ui = iapUi();
-    void* complete = target(T_PURCHASE_COMPLETE).addr;
-    if (ui && complete && target(T_PURCHASE_COMPLETE).method) {
-        LOGI("Free purchase: product=%d", productId);
-        auto fn = reinterpret_cast<void (*)(void*, int32_t, void*)>(complete);
-        fn(ui, productId, target(T_PURCHASE_COMPLETE).method);
-        toast("MODS: Purchase simulated successfully");
+// Lewati Play Billing sepenuhnya: serahkan id produk ke jalur penyelesaian milik
+// game, yang sama dengan yang akan dipanggil callback toko. UI__Iap._Update lalu
+// memberikan candy-nya pada frame berikutnya.
+void hookBeli(int32_t productId, void* method) {
+    void* ui = uiIap();
+    void* selesai = target(T_PURCHASE_COMPLETE).addr;
+    if (ui && selesai && target(T_PURCHASE_COMPLETE).method) {
+        LOGI("Pembelian gratis: produk=%d", productId);
+        auto panggil = reinterpret_cast<void (*)(void*, int32_t, void*)>(selesai);
+        panggil(ui, productId, target(T_PURCHASE_COMPLETE).method);
+        tampilkanToast("MODS: Pembelian berhasil disimulasikan");
         return;
     }
-    LOGE("Free purchase: Iap.ui unavailable, falling back to the store");
-    auto orig = reinterpret_cast<void (*)(int32_t, void*)>(target(T_BUY).orig);
-    if (!orig)
+    LOGE("Pembelian gratis: Iap.ui tidak tersedia, kembali ke toko");
+    auto asli = reinterpret_cast<void (*)(int32_t, void*)>(target(T_BUY).orig);
+    if (!asli)
         return;
-    orig(productId, method);
+    asli(productId, method);
 }
 
-// Shared gate for tiles, models and melodies.
-bool unlockHook(void*, int32_t, bool* checked, bool* unlock, void*) {
+// Gerbang bersama untuk tile, model, dan melodi.
+bool hookBukaKunci(void*, int32_t, bool* checked, bool* unlock, void*) {
     if (checked)
         *checked = true;
     if (unlock)
@@ -53,16 +53,16 @@ bool unlockHook(void*, int32_t, bool* checked, bool* unlock, void*) {
 
 } // namespace
 
-void installIapHooks() {
-    iapClass = classOf("Iap");
-    if (!resolveField(iapClass, "ui", uiRef)) {
-        LOGE("Field Iap.ui not found; free purchase will use the store");
+void pasangHookIap() {
+    kelasIap = kelasDari("Iap");
+    if (!cariField(kelasIap, "ui", fieldUi)) {
+        LOGE("Field Iap.ui tidak ditemukan; pembelian gratis memakai toko");
     }
 
-    installHook(target(T_BUY), reinterpret_cast<void*>(buyHook));
-    installHook(target(T_UNLOCK_CHECK), reinterpret_cast<void*>(unlockHook));
+    pasangHook(target(T_BUY), reinterpret_cast<void*>(hookBeli));
+    pasangHook(target(T_UNLOCK_CHECK), reinterpret_cast<void*>(hookBukaKunci));
 
     if (!target(T_PURCHASE_COMPLETE).addr) {
-        LOGE("Target not found: UI__Iap.Purchase__Complete");
+        LOGE("Target tidak ditemukan: UI__Iap.Purchase__Complete");
     }
 }

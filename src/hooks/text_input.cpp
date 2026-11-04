@@ -9,92 +9,93 @@
 
 namespace {
 
-Field inputLimit = {};
-Field nameData = {};
-Field nameLimit = {};
+Field batasInput = {};
+Field dataNama = {};
+Field batasNama = {};
 
-// The game rewrites UIInput.characterLimit (name 38, day 2, month 2, year 4)
-// right before each edit, so both truncation points have to override it:
-// Insert(string) enforces the limit per keystroke, Validate(string) trims the
-// value on Set/submit.
-void* validateHook(void* self, void* value, void* method) {
-    auto orig = reinterpret_cast<void* (*)(void*, void*, void*)>(target(T_INPUT_VALIDATE).orig);
-    if (!orig)
+// Game menulis ulang UIInput.characterLimit (nama 38, hari 2, bulan 2, tahun 4)
+// tepat sebelum setiap edit, jadi kedua titik pemotongan harus menimpanya:
+// Insert(string) menegakkan batas per ketukan, Validate(string) memangkas nilai
+// saat Set/kirim.
+void* hookValidasi(void* self, void* value, void* method) {
+    auto asli = reinterpret_cast<void* (*)(void*, void*, void*)>(target(T_INPUT_VALIDATE).orig);
+    if (!asli)
         return value;
-    writeInt(self, inputLimit, INT32_MAX);
-    return orig(self, value, method);
+    tulisInt(self, batasInput, INT32_MAX);
+    return asli(self, value, method);
 }
 
-void insertHook(void* self, void* text, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_INPUT_INSERT).orig);
-    if (!orig)
+void hookSisip(void* self, void* text, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_INPUT_INSERT).orig);
+    if (!asli)
         return;
-    writeInt(self, inputLimit, INT32_MAX);
-    orig(self, text, method);
+    tulisInt(self, batasInput, INT32_MAX);
+    asli(self, text, method);
 }
 
-// The keyboard converts this string to UTF-8 and walks its characters up to the
-// length in its header. A string whose header no longer holds a sane length
-// makes that walk run past the heap, so hand over a fresh empty string instead
-// of letting the engine scan unmapped memory.
-constexpr int32_t kMaxKeyboardLen = 4096;
+// Keyboard mengubah string ini ke UTF-8 dan menelusuri karakternya sampai
+// panjang di header-nya. String yang header-nya tidak lagi menyimpan panjang
+// wajar membuat penelusuran itu melewati heap, jadi serahkan string kosong baru
+// alih-alih membiarkan engine memindai memori yang tidak terpetakan.
+constexpr int32_t kBatasKeyboard = 4096;
 
-void* emptyString() { return newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0); }
+void* stringKosong() { return stringUtf16Baru(reinterpret_cast<const uint16_t*>(u""), 0); }
 
-// Length is unused on the mobile path, but the Steam/gamepad path forwards it
-// to its own text input. Zero means no character limit there.
-void keyboardOpenHook(void* self, int32_t s, int32_t type, void* text, int32_t, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, int32_t, int32_t, void*, int32_t, void*)>(
+// Parameter Length tidak terpakai di jalur mobile, tetapi jalur Steam/gamepad
+// meneruskannya ke input teks miliknya sendiri. Nol berarti tanpa batas karakter
+// di sana.
+void hookBukaKeyboard(void* self, int32_t s, int32_t type, void* text, int32_t, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, int32_t, int32_t, void*, int32_t, void*)>(
         target(T_KEYBOARD_OPEN).orig);
-    if (!orig)
+    if (!asli)
         return;
-    int32_t len = stringLength(text);
-    // Names the string the engine is about to convert, so a bad pointer shows up
-    // in the log right before the crash instead of only in the fault address.
-    LOGI("Keyboard: s=%d type=%d text=%p len=%d", s, type, text, len);
-    if (!text || len < 0 || len > kMaxKeyboardLen) {
-        void* empty = emptyString();
-        if (empty)
-            text = empty;
+    int32_t panjang = panjangString(text);
+    // Menyebut string yang akan diubah engine, supaya pointer buruk muncul di log
+    // tepat sebelum crash, bukan hanya di alamat kesalahan.
+    LOGI("Keyboard: s=%d type=%d text=%p panjang=%d", s, type, text, panjang);
+    if (!text || panjang < 0 || panjang > kBatasKeyboard) {
+        void* kosong = stringKosong();
+        if (kosong)
+            text = kosong;
     }
-    orig(self, s, type, text, 0, method);
+    asli(self, s, type, text, 0, method);
 }
 
-// Name__Check trims the profile name to _name.length_Limit and falls back to a
-// default when the result is empty. Raise the limit around the call so the trim
-// passes and the rest of the check still runs.
-void nameCheckHook(void* self, void** name, bool fix, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void**, bool, void*)>(target(T_NAME_CHECK).orig);
-    if (!orig)
+// Name__Check memangkas nama profil sesuai _name.length_Limit dan kembali ke
+// nilai bawaan bila hasilnya kosong. Naikkan batas itu di sekitar panggilan
+// supaya pemangkasannya lolos dan sisa pemeriksaannya tetap berjalan.
+void hookCekNama(void* self, void** name, bool fix, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void**, bool, void*)>(target(T_NAME_CHECK).orig);
+    if (!asli)
         return;
-    void* data = readPtr(self, nameData);
-    int32_t saved = 0;
+    void* data = bacaPtr(self, dataNama);
+    int32_t tersimpan = 0;
     if (data) {
-        saved = readInt(data, nameLimit);
-        writeInt(data, nameLimit, INT32_MAX);
+        tersimpan = bacaInt(data, batasNama);
+        tulisInt(data, batasNama, INT32_MAX);
     }
-    orig(self, name, fix, method);
+    asli(self, name, fix, method);
     if (data)
-        writeInt(data, nameLimit, saved);
+        tulisInt(data, batasNama, tersimpan);
 }
 
 } // namespace
 
-void installTextInputHooks() {
-    if (!resolveField(classOf("UIInput"), "characterLimit", inputLimit)) {
-        LOGE("Field UIInput.characterLimit not found; input limits stay default");
+void pasangHookInputTeks() {
+    if (!cariField(kelasDari("UIInput"), "characterLimit", batasInput)) {
+        LOGE("Field UIInput.characterLimit tidak ditemukan; batas input tetap bawaan");
     }
 
-    void* accountManager = classOf("Net__Account__Manager");
-    if (resolveField(accountManager, "_name", nameData) &&
-        resolveField(fieldClass(nameData), "length_Limit", nameLimit)) {
-        LOGI("Name limit field OK");
+    void* kelasAkun = kelasDari("Net__Account__Manager");
+    if (cariField(kelasAkun, "_name", dataNama) &&
+        cariField(kelasField(dataNama), "length_Limit", batasNama)) {
+        LOGI("Batas nama field OK");
     } else {
-        LOGE("Name limit field not found; profile name stays capped");
+        LOGE("Batas nama field tidak ditemukan; nama profil tetap terbatas");
     }
 
-    installHook(target(T_INPUT_VALIDATE), reinterpret_cast<void*>(validateHook));
-    installHook(target(T_INPUT_INSERT), reinterpret_cast<void*>(insertHook));
-    installHook(target(T_KEYBOARD_OPEN), reinterpret_cast<void*>(keyboardOpenHook));
-    installHook(target(T_NAME_CHECK), reinterpret_cast<void*>(nameCheckHook));
+    pasangHook(target(T_INPUT_VALIDATE), reinterpret_cast<void*>(hookValidasi));
+    pasangHook(target(T_INPUT_INSERT), reinterpret_cast<void*>(hookSisip));
+    pasangHook(target(T_KEYBOARD_OPEN), reinterpret_cast<void*>(hookBukaKeyboard));
+    pasangHook(target(T_NAME_CHECK), reinterpret_cast<void*>(hookCekNama));
 }

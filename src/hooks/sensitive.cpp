@@ -7,13 +7,13 @@
 
 namespace {
 
-// Every text check in the game is decided here: the word list is asked first,
-// and when the caller also asked for a note it is raised. Answering false skips
-// both, so chat lines, names and profile text all pass.
-bool sensitiveHook(void*, void*, int32_t, bool, void*) { return false; }
+// Setiap pemeriksaan teks di game diputuskan di sini: daftar kata ditanyakan
+// lebih dulu, dan bila pemanggil juga meminta catatan, catatan itu dimunculkan.
+// Menjawab false melewati keduanya, jadi baris chat, nama, dan teks profil lolos.
+bool hookSensitif(void*, void*, int32_t, bool, void*) { return false; }
 
 } // namespace
 
-void installSensitiveHooks() {
-    installHook(target(T_SENSITIVE_WORD), reinterpret_cast<void*>(sensitiveHook));
+void pasangHookSensitif() {
+    pasangHook(target(T_SENSITIVE_WORD), reinterpret_cast<void*>(hookSensitif));
 }

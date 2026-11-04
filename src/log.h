@@ -1,29 +1,29 @@
 #pragma once
 
-// File logging is optional: -DBOKU_LOG=OFF drops every log call and the crash
-// handler, which is the smallest .so.
+// Pencatatan ke berkas bersifat opsional: -DBOKU_LOG=OFF membuang setiap panggilan
+// log dan penangan crash, yang menghasilkan .so paling kecil.
 #ifdef BOKU_LOG
 
-void logPrint(char level, const char* fmt, ...);
-void logOpenFile();
-void installCrashLog();
+void cetakLog(char tingkat, const char* fmt, ...);
+void bukaFileLog();
+void pasangLogCrash();
 
-// Records the caller of abort() and __stack_chk_fail() so the next SIGABRT names
-// the code that decided to kill the process. Call once ShadowHook is up.
-void installCrashProbes();
+// Mencatat pemanggil abort() dan __stack_chk_fail() supaya SIGABRT berikutnya
+// menyebut kode yang memutuskan mematikan proses. Panggil setelah ShadowHook siap.
+void pasangProbeCrash();
 
-// Full path of the file this session writes, or nullptr before it is open.
-const char* logFilePath();
+// Path lengkap berkas yang ditulis sesi ini, atau nullptr sebelum dibuka.
+const char* pathFileLog();
 
-#define LOGI(...) logPrint('I', __VA_ARGS__)
-#define LOGE(...) logPrint('E', __VA_ARGS__)
+#define LOGI(...) cetakLog('I', __VA_ARGS__)
+#define LOGE(...) cetakLog('E', __VA_ARGS__)
 
 #else
 
-inline void logOpenFile() {}
-inline void installCrashLog() {}
-inline void installCrashProbes() {}
-inline const char* logFilePath() { return nullptr; }
+inline void bukaFileLog() {}
+inline void pasangLogCrash() {}
+inline void pasangProbeCrash() {}
+inline const char* pathFileLog() { return nullptr; }
 
 #define LOGI(...) ((void)0)
 #define LOGE(...) ((void)0)

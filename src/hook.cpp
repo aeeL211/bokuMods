@@ -6,56 +6,58 @@
 
 namespace {
 
-int installedCount = 0;
+int jumlahTerpasang = 0;
 
 } // namespace
 
-// Init once, early: the mode cannot change after init and unique mode lets a
-// hook call its trampoline directly. debuggable stays false because it writes to
-// logcat, which this project does not use.
-bool initShadowHook() {
-    int e = shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-    if (e) {
-        LOGE("ShadowHook init failed: %d %s", e, shadowhook_to_errmsg(e));
+// Inisialisasi sekali dan sedini mungkin: mode tidak bisa berubah setelah
+// diinisialisasi dan mode unique membuat sebuah hook bisa memanggil trampoline-nya
+// langsung. debuggable tetap false karena ia menulis ke logcat, yang tidak dipakai
+// proyek ini.
+bool inisialisasiShadowHook() {
+    int kode = shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+    if (kode) {
+        LOGE("ShadowHook gagal diinisialisasi: %d %s", kode, shadowhook_to_errmsg(kode));
         return false;
     }
-    LOGI("ShadowHook initialized");
+    LOGI("ShadowHook siap");
     return true;
 }
 
-bool installHook(Target& t, void* replacement) {
-    if (!t.addr) {
-        LOGE("Target not found: %s.%s", t.cls, t.name);
+bool pasangHook(Target& entri, void* pengganti) {
+    if (!entri.addr) {
+        LOGE("Target tidak ditemukan: %s.%s", entri.cls, entri.name);
         return false;
     }
-    // Two files can name the same method, and ShadowHook only owns one hook per
-    // address in unique mode, so a target keeps its first stub and reports the
-    // repeat as installed instead of overwriting the trampoline the first file
-    // already calls through.
-    if (t.stub)
+    // Dua berkas bisa menamai method yang sama, dan ShadowHook hanya memiliki satu
+    // hook per alamat pada mode unique, jadi sebuah target menyimpan stub pertamanya
+    // dan melaporkan pengulangan sebagai terpasang daripada menimpa trampoline yang
+    // sudah dipanggil berkas pertama.
+    if (entri.stub)
         return true;
-    void* stub = shadowhook_hook_func_addr(t.addr, replacement, &t.orig);
+    void* stub = shadowhook_hook_func_addr(entri.addr, pengganti, &entri.orig);
     if (!stub) {
-        int e = shadowhook_get_errno();
-        LOGE("Hook failed: %s.%s (error %d, %s)", t.cls, t.name, e, shadowhook_to_errmsg(e));
+        int kode = shadowhook_get_errno();
+        LOGE("Hook gagal: %s.%s (error %d, %s)", entri.cls, entri.name, kode,
+             shadowhook_to_errmsg(kode));
         return false;
     }
-    t.stub = stub;
-    installedCount++;
+    entri.stub = stub;
+    jumlahTerpasang++;
     return true;
 }
 
-int installedHooks() { return installedCount; }
+int jumlahHookTerpasang() { return jumlahTerpasang; }
 
-bool installProbeHook(void* addr, void* replacement, void** original, const char* name) {
-    if (!addr) {
-        LOGE("Probe not found: %s", name);
+bool pasangHookProbe(void* alamat, void* pengganti, void** asli, const char* nama) {
+    if (!alamat) {
+        LOGE("Probe tidak ditemukan: %s", nama);
         return false;
     }
-    void* stub = shadowhook_hook_func_addr(addr, replacement, original);
+    void* stub = shadowhook_hook_func_addr(alamat, pengganti, asli);
     if (!stub) {
-        int e = shadowhook_get_errno();
-        LOGE("Probe failed: %s (error %d, %s)", name, e, shadowhook_to_errmsg(e));
+        int kode = shadowhook_get_errno();
+        LOGE("Probe gagal: %s (error %d, %s)", nama, kode, shadowhook_to_errmsg(kode));
         return false;
     }
     return true;

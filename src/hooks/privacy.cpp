@@ -7,155 +7,201 @@
 
 namespace {
 
-// Each account detail row asks this before it decides what to show. Answering
-// yes keeps the owner's "hide" choice from replacing the value.
-bool managerHook(void*, int, void*, bool, void*) { return true; }
+// Setiap baris detail akun menanyakan ini sebelum memutuskan apa yang ditampilkan.
+// Menjawab ya membuat pilihan "sembunyikan" milik pemilik tidak menggantikan
+// nilainya.
+bool hookManajer(void*, int, void*, bool, void*) { return true; }
 
-// The friend, blacklist, add-friend and verify screens carry their own copy of
-// the same check, so every one of them is answered the same way.
-bool rowHook(void*, int, void*) { return true; }
+// Layar teman, blacklist, tambah teman, dan verifikasi membawa salinan
+// pengecekan yang sama, jadi semuanya dijawab dengan cara yang sama.
+bool hookBaris(void*, int, void*) { return true; }
 
-// A user object and a guest account keep the email and the privacy value that
-// decides whether it may be sent in the same shape, so one resolver serves both.
-struct EmailFields {
+// Objek pengguna dan akun tamu menyimpan email serta nilai privasi yang
+// menentukan boleh-tidaknya email itu dikirim dalam bentuk yang sama, jadi satu
+// pencari field cukup untuk keduanya.
+struct FieldEmail {
     Field email;
-    Field privacy;
-    Field privacyEmail;
-    Field visible;
+    Field privasi;
+    Field emailPrivasi;
+    Field terlihat;
 };
 
-EmailFields userEmail = {};
-EmailFields guestEmail = {};
-Field userSelectField = {};
-Field guestAccountField = {};
-bool fillLogged = false;
+FieldEmail emailPengguna = {};
+FieldEmail emailTamu = {};
+Field fieldPilihPengguna = {};
+Field fieldManajerTamu = {};
+Field fieldDaftarTamu = {};
+Field fieldItemTamu = {};
+Field fieldUkuranTamu = {};
+Field fieldKunciTamu = {};
+Field fieldAkunTamu = {};
+bool isiTercatat = false;
 
-using SetFn = void (*)(void*, void*, void*, void*, bool, void*);
-using SetLocalFn = void (*)(void*, void*, void*, void*);
-using CommonFn = void (*)(void*, void*, bool, void*, void*, void*, void*, void*, void*);
-using PrivacyFn = void (*)(void*, void*, int, void*, void*);
+using FnSetel = void (*)(void*, void*, void*, void*, bool, void*);
+using FnSetelLokal = void (*)(void*, void*, void*, void*);
+using FnUmum = void (*)(void*, void*, bool, void*, void*, void*, void*, void*, void*);
+using FnPrivasi = void (*)(void*, void*, int, void*, void*);
 
-// The game's own word for an email privacy value, so the row reads like the
-// setting screen instead of a word invented here.
-void* privacyLabel(int visible) {
+// Kata yang dipakai game sendiri untuk sebuah nilai privasi email, jadi barisnya
+// terbaca seperti layar pengaturan dan bukan kata buatan sendiri.
+void* labelPrivasi(int terlihat) {
     auto fn = reinterpret_cast<void* (*)(int, void*)>(target(T_PRIVACY_LABEL).addr);
-    return fn ? fn(visible, target(T_PRIVACY_LABEL).method) : nullptr;
+    return fn ? fn(terlihat, target(T_PRIVACY_LABEL).method) : nullptr;
 }
 
-// Another account's email only travels when its owner allows it, so a hidden
-// one leaves the row blank. The owner's privacy label is shown instead.
-void fillEmail(void* owner, const EmailFields& f) {
-    if (!owner)
+// Email milik akun lain hanya ikut terkirim bila pemiliknya mengizinkan, jadi
+// email yang disembunyikan membuat barisnya kosong. Label privasi milik pemilik
+// ditampilkan sebagai gantinya.
+void isiEmail(void* pemilik, const FieldEmail& bidang) {
+    if (!pemilik)
         return;
-    void* email = readPtr(owner, f.email);
-    if (email && stringLength(email) > 0)
+    void* email = bacaPtr(pemilik, bidang.email);
+    if (email && panjangString(email) > 0)
         return;
-    void* privacy = readPtr(owner, f.privacy);
-    void* emailPrivacy = privacy ? readPtr(privacy, f.privacyEmail) : nullptr;
-    if (!emailPrivacy)
+    void* privasi = bacaPtr(pemilik, bidang.privasi);
+    void* emailPrivasi = privasi ? bacaPtr(privasi, bidang.emailPrivasi) : nullptr;
+    if (!emailPrivasi)
         return;
-    void* label = privacyLabel(readInt(emailPrivacy, f.visible));
+    void* label = labelPrivasi(bacaInt(emailPrivasi, bidang.terlihat));
     if (!label)
         return;
-    setRef(owner, f.email, label);
-    if (fillLogged)
+    setelRef(pemilik, bidang.email, label);
+    if (isiTercatat)
         return;
-    fillLogged = true;
-    char text[64];
-    if (toUtf8(label, text, sizeof(text)))
-        LOGI("Email privacy label: %s", text);
+    isiTercatat = true;
+    char teks[64];
+    if (keUtf8(label, teks, sizeof(teks)))
+        LOGI("Label privasi email: %s", teks);
 }
 
-bool resolveEmailFields(EmailFields& f, void* klass) {
-    if (!klass)
+bool cariFieldEmail(FieldEmail& bidang, void* kelas) {
+    if (!kelas)
         return false;
-    return resolveField(klass, "email", f.email) && resolveField(klass, "privacy", f.privacy) &&
-           resolveField(fieldClass(f.privacy), "email", f.privacyEmail) &&
-           resolveField(fieldClass(f.privacyEmail), "visible", f.visible);
+    return cariField(kelas, "email", bidang.email) && cariField(kelas, "privacy", bidang.privasi) &&
+           cariField(kelasField(bidang.privasi), "email", bidang.emailPrivasi) &&
+           cariField(kelasField(bidang.emailPrivasi), "visible", bidang.terlihat);
 }
 
-void fillUserEmail(void* userRef) {
-    fillEmail(userRef ? *reinterpret_cast<void**>(userRef) : nullptr, userEmail);
+void isiEmailPengguna(void* refPengguna) {
+    isiEmail(refPengguna ? *reinterpret_cast<void**>(refPengguna) : nullptr, emailPengguna);
 }
 
-void setHook(void* self, void* userRef, void* uid, void* docs, bool overwrite, void* method) {
-    auto orig = reinterpret_cast<SetFn>(target(T_USER_SET).orig);
-    if (orig)
-        orig(self, userRef, uid, docs, overwrite, method);
-    fillUserEmail(userRef);
+void hookSetel(void* sendiri, void* refPengguna, void* uid, void* dokumen, bool timpa,
+               void* metode) {
+    auto asli = reinterpret_cast<FnSetel>(target(T_USER_SET).orig);
+    if (asli)
+        asli(sendiri, refPengguna, uid, dokumen, timpa, metode);
+    isiEmailPengguna(refPengguna);
 }
 
-// The three local setters differ only by the type of their second argument.
-void setLocal(TargetId id, void* self, void* userRef, void* data, void* method) {
-    auto orig = reinterpret_cast<SetLocalFn>(target(id).orig);
-    if (orig)
-        orig(self, userRef, data, method);
-    fillUserEmail(userRef);
+// Ketiga penyetel lokal hanya berbeda pada tipe argumen keduanya.
+void setelLokal(TargetId id, void* sendiri, void* refPengguna, void* data, void* metode) {
+    auto asli = reinterpret_cast<FnSetelLokal>(target(id).orig);
+    if (asli)
+        asli(sendiri, refPengguna, data, metode);
+    isiEmailPengguna(refPengguna);
 }
 
-void setStringHook(void* self, void* userRef, void* data, void* method) {
-    setLocal(T_USER_SET_LOCAL, self, userRef, data, method);
+void hookSetelString(void* sendiri, void* refPengguna, void* data, void* metode) {
+    setelLokal(T_USER_SET_LOCAL, sendiri, refPengguna, data, metode);
 }
 
-void setArrayHook(void* self, void* userRef, void* data, void* method) {
-    setLocal(T_USER_SET_LOCAL_ARRAY, self, userRef, data, method);
+void hookSetelArray(void* sendiri, void* refPengguna, void* data, void* metode) {
+    setelLokal(T_USER_SET_LOCAL_ARRAY, sendiri, refPengguna, data, metode);
 }
 
-void setListHook(void* self, void* userRef, void* data, void* method) {
-    setLocal(T_USER_SET_LOCAL_LIST, self, userRef, data, method);
+void hookSetelList(void* sendiri, void* refPengguna, void* data, void* metode) {
+    setelLokal(T_USER_SET_LOCAL_LIST, sendiri, refPengguna, data, metode);
 }
 
-// The profile packet builds the guest account and the privacy message may
-// replace its email again, so both paths end in the same fill.
-void commonHook(void* self, void* user, bool logined, void* uid, void* email, void* date,
-                void* portrait, void* intro, void* method) {
-    auto orig = reinterpret_cast<CommonFn>(target(T_GUEST_COMMON).orig);
-    if (orig)
-        orig(self, user, logined, uid, email, date, portrait, intro, method);
-    fillEmail(readPtr(self, guestAccountField), guestEmail);
+// Manajer tidak menyimpan akun sendiri: setiap tamu di daftar room membawa satu,
+// dengan kunci berupa teks yang sama dengan nama di paket profil. Akunnya karena
+// itu dicari di daftar tersebut, dan kunci dari luar room tidak menyisakan apa
+// pun untuk diisi.
+void* akunTamu(void* sendiri, void* pengguna) {
+    void* manajer = bacaPtr(sendiri, fieldManajerTamu);
+    void* daftarTamu = bacaPtr(manajer, fieldDaftarTamu);
+    void* item = bacaPtr(daftarTamu, fieldItemTamu);
+    if (!item)
+        return nullptr;
+
+    int32_t jumlah = bacaInt(daftarTamu, fieldUkuranTamu);
+    int32_t kapasitas = panjangArray(item);
+    if (jumlah > kapasitas)
+        jumlah = kapasitas;
+
+    char* data = dataArray(item);
+    for (int32_t i = 0; i < jumlah; i++) {
+        void* tamu = *reinterpret_cast<void**>(data + i * sizeof(void*));
+        if (!tamu || !samaString(bacaPtr(tamu, fieldKunciTamu), pengguna))
+            continue;
+        return bacaPtr(tamu, fieldAkunTamu);
+    }
+    return nullptr;
 }
 
-void privacyEmailHook(void* self, void* user, int visible, void* email, void* method) {
-    auto orig = reinterpret_cast<PrivacyFn>(target(T_GUEST_PRIVACY_EMAIL).orig);
-    if (orig)
-        orig(self, user, visible, email, method);
-    fillEmail(readPtr(self, guestAccountField), guestEmail);
+// Paket profil membangun akun tamu dan pesan privasi bisa mengganti emailnya
+// lagi, jadi kedua jalur berakhir pada pengisian yang sama.
+void hookUmum(void* sendiri, void* pengguna, bool login, void* uid, void* email, void* tanggal,
+              void* potret, void* perkenalan, void* metode) {
+    auto asli = reinterpret_cast<FnUmum>(target(T_GUEST_COMMON).orig);
+    if (asli)
+        asli(sendiri, pengguna, login, uid, email, tanggal, potret, perkenalan, metode);
+    isiEmail(akunTamu(sendiri, pengguna), emailTamu);
 }
 
-bool resolvePrivacyFields() {
-    void* manager = classOf("Net__Account__Manager");
-    void* guest = classOf("Guest__Manager");
-    return resolveField(manager, "user_Select", userSelectField) &&
-           resolveEmailFields(userEmail, fieldClass(userSelectField)) &&
-           resolveField(guest, "account", guestAccountField) &&
-           resolveEmailFields(guestEmail, fieldClass(guestAccountField));
+void hookEmailPrivasi(void* sendiri, void* pengguna, int terlihat, void* email, void* metode) {
+    auto asli = reinterpret_cast<FnPrivasi>(target(T_GUEST_PRIVACY_EMAIL).orig);
+    if (asli)
+        asli(sendiri, pengguna, terlihat, email, metode);
+    isiEmail(akunTamu(sendiri, pengguna), emailTamu);
+}
+
+bool cariFieldTamu() {
+    void* kelasManajerTamu = kelasDari("Guest__Manager");
+    if (!cariField(kelasManajerTamu, "a", fieldManajerTamu))
+        return false;
+    return cariField(kelasField(fieldManajerTamu), "guests", fieldDaftarTamu) &&
+           cariField(kelasField(fieldDaftarTamu), "_items", fieldItemTamu) &&
+           cariField(kelasField(fieldDaftarTamu), "_size", fieldUkuranTamu) &&
+           cariField(kelasElemenField(fieldItemTamu), "key", fieldKunciTamu) &&
+           cariField(kelasElemenField(fieldItemTamu), "account", fieldAkunTamu) &&
+           cariFieldEmail(emailTamu, kelasField(fieldAkunTamu));
+}
+
+bool cariFieldPengguna() {
+    void* manajer = kelasDari("Net__Account__Manager");
+    return cariField(manajer, "user_Select", fieldPilihPengguna) &&
+           cariFieldEmail(emailPengguna, kelasField(fieldPilihPengguna));
 }
 
 } // namespace
 
-void installPrivacyHooks() {
-    if (resolvePrivacyFields())
-        LOGI("Privacy fields OK");
+void pasangHookPrivasi() {
+    if (cariFieldPengguna())
+        LOGI("Field privasi siap");
     else
-        LOGE("Privacy fields not found; a hidden email stays blank");
+        LOGE("Field privasi tidak ditemukan; email yang disembunyikan tetap kosong");
+    if (!cariFieldTamu())
+        LOGE("Field akun tamu tidak ditemukan; email di dalam room tetap kosong");
 
-    const TargetId setters[] = {T_USER_SET, T_USER_SET_LOCAL, T_USER_SET_LOCAL_ARRAY,
-                                T_USER_SET_LOCAL_LIST};
-    int found = 0;
-    for (TargetId id : setters)
-        found += target(id).addr ? 1 : 0;
-    LOGI("Email setters: %d of 4", found);
+    const TargetId penyetel[] = {T_USER_SET, T_USER_SET_LOCAL, T_USER_SET_LOCAL_ARRAY,
+                                 T_USER_SET_LOCAL_LIST};
+    int ditemukan = 0;
+    for (TargetId id : penyetel)
+        ditemukan += target(id).addr ? 1 : 0;
+    LOGI("Penyetel email: %d dari 4", ditemukan);
 
-    installHook(target(T_PRIVACY_MANAGER), reinterpret_cast<void*>(managerHook));
-    installHook(target(T_PRIVACY_BLACKLIST), reinterpret_cast<void*>(rowHook));
-    installHook(target(T_PRIVACY_ADD_FRIEND), reinterpret_cast<void*>(rowHook));
-    installHook(target(T_PRIVACY_FRIEND_PROFILE), reinterpret_cast<void*>(rowHook));
-    installHook(target(T_PRIVACY_VERIFY), reinterpret_cast<void*>(rowHook));
-    installHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(rowHook));
-    installHook(target(T_USER_SET), reinterpret_cast<void*>(setHook));
-    installHook(target(T_USER_SET_LOCAL), reinterpret_cast<void*>(setStringHook));
-    installHook(target(T_USER_SET_LOCAL_ARRAY), reinterpret_cast<void*>(setArrayHook));
-    installHook(target(T_USER_SET_LOCAL_LIST), reinterpret_cast<void*>(setListHook));
-    installHook(target(T_GUEST_COMMON), reinterpret_cast<void*>(commonHook));
-    installHook(target(T_GUEST_PRIVACY_EMAIL), reinterpret_cast<void*>(privacyEmailHook));
+    pasangHook(target(T_PRIVACY_MANAGER), reinterpret_cast<void*>(hookManajer));
+    pasangHook(target(T_PRIVACY_BLACKLIST), reinterpret_cast<void*>(hookBaris));
+    pasangHook(target(T_PRIVACY_ADD_FRIEND), reinterpret_cast<void*>(hookBaris));
+    pasangHook(target(T_PRIVACY_FRIEND_PROFILE), reinterpret_cast<void*>(hookBaris));
+    pasangHook(target(T_PRIVACY_VERIFY), reinterpret_cast<void*>(hookBaris));
+    pasangHook(target(T_PRIVACY_VERIFY_EMAIL), reinterpret_cast<void*>(hookBaris));
+    pasangHook(target(T_USER_SET), reinterpret_cast<void*>(hookSetel));
+    pasangHook(target(T_USER_SET_LOCAL), reinterpret_cast<void*>(hookSetelString));
+    pasangHook(target(T_USER_SET_LOCAL_ARRAY), reinterpret_cast<void*>(hookSetelArray));
+    pasangHook(target(T_USER_SET_LOCAL_LIST), reinterpret_cast<void*>(hookSetelList));
+    pasangHook(target(T_GUEST_COMMON), reinterpret_cast<void*>(hookUmum));
+    pasangHook(target(T_GUEST_PRIVACY_EMAIL), reinterpret_cast<void*>(hookEmailPrivasi));
 }

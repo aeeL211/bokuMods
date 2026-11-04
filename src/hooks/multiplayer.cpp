@@ -7,109 +7,112 @@
 
 namespace {
 
-Field sizeA = {};
-Field managerTile = {};
-Field tileWorldSize = {};
-Field worldSizeMax = {};
-Field worldSizeMulti = {};
-Field maxW = {};
-Field maxH = {};
-Field maxPreset = {};
-Field presetW = {};
-Field presetH = {};
-Field multiMax = {};
-bool capReady = false;
+Field komponenUkuran = {};
+Field tileManajer = {};
+Field ukuranDuniaTile = {};
+Field batasUkuranDunia = {};
+Field multiUkuranDunia = {};
+Field batasLebar = {};
+Field batasTinggi = {};
+Field presetTeratas = {};
+Field lebarPreset = {};
+Field tinggiPreset = {};
+Field batasMulti = {};
+bool batasSiap = false;
 
-// The host owns the build and destroy permissions and rejects anything a guest
-// tries to do beyond them, so both flags now pass through unchanged. Only the
-// save-world flag is still forced, because the host sends it once at the start
-// and a guest gets no other chance to enable it.
-void permissionStartHook(void* self, bool build, bool destroy, bool, void* method) {
-    LOGI("Permission: start game build=%d destroy=%d", build, destroy);
-    auto orig =
+// Host memegang izin build dan destroy dan menolak apa pun yang dicoba guest di
+// luar itu, jadi kedua flag sekarang diteruskan apa adanya. Hanya flag simpan
+// dunia yang masih dipaksa, karena host mengirimnya sekali di awal dan guest
+// tidak mendapat kesempatan lain untuk mengaktifkannya.
+void hookIzinMulai(void* self, bool build, bool destroy, bool, void* method) {
+    LOGI("Izin: mulai game build=%d destroy=%d", build, destroy);
+    auto asli =
         reinterpret_cast<void (*)(void*, bool, bool, bool, void*)>(target(T_PERMISSION_START).orig);
-    if (!orig)
+    if (!asli)
         return;
-    orig(self, build, destroy, true, method);
+    asli(self, build, destroy, true, method);
 }
 
-void permissionSaveHook(void* self, bool, void* method) {
-    LOGI("Permission: save world received");
-    auto orig = reinterpret_cast<void (*)(void*, bool, void*)>(target(T_PERMISSION_SAVE).orig);
-    if (!orig)
+void hookIzinSimpan(void* self, bool, void* method) {
+    LOGI("Izin: simpan dunia diterima");
+    auto asli = reinterpret_cast<void (*)(void*, bool, void*)>(target(T_PERMISSION_SAVE).orig);
+    if (!asli)
         return;
-    orig(self, true, method);
+    asli(self, true, method);
 }
 
-// The room list drops every room whose world area is above the limit of this
-// device, and the join and info panels reuse the same test. Answering true
-// keeps those rooms listed whatever their size.
-bool roomSizeHook(void*, int, int, void*) { return true; }
+// Daftar room membuang setiap room yang luas dunianya di atas batas perangkat
+// ini, dan panel join serta info memakai tes yang sama. Menjawab true membuat
+// room itu tetap terdaftar berapa pun ukurannya.
+bool hookUkuranRoom(void*, int, int, void*) { return true; }
 
-// The size page reads max.w and max.h as the slider limit, but the tile manager
-// lowered that cap to this device's tier at boot, long before the hooks exist.
-// Restoring the game's own top preset each time the page opens lifts the limit
-// without a number of our own, and the room area follows the new limit.
-void raiseWorldCap(void* self) {
-    if (!capReady)
+// Halaman ukuran membaca max.w dan max.h sebagai batas slider, tetapi manajer
+// tile menurunkan batas itu ke tier perangkat ini saat boot, jauh sebelum hook
+// ada. Mengembalikan preset teratas milik game setiap kali halaman dibuka
+// melonggarkan batas itu tanpa angka buatan sendiri, dan luas room mengikuti
+// batas yang baru.
+void naikkanBatasDunia(void* self) {
+    if (!batasSiap)
         return;
-    void* manager = readPtr(self, sizeA);
-    void* tile = readPtr(manager, managerTile);
-    void* world = readPtr(tile, tileWorldSize);
-    void* max = readPtr(world, worldSizeMax);
-    void* preset = readPtr(max, maxPreset);
-    int32_t w = readInt(preset, presetW);
-    int32_t h = readInt(preset, presetH);
-    if (w <= 0 || h <= 0)
+    void* manajer = bacaPtr(self, komponenUkuran);
+    void* tile = bacaPtr(manajer, tileManajer);
+    void* dunia = bacaPtr(tile, ukuranDuniaTile);
+    void* batas = bacaPtr(dunia, batasUkuranDunia);
+    void* preset = bacaPtr(batas, presetTeratas);
+    int32_t lebar = bacaInt(preset, lebarPreset);
+    int32_t tinggi = bacaInt(preset, tinggiPreset);
+    if (lebar <= 0 || tinggi <= 0)
         return;
-    int32_t oldW = readInt(max, maxW);
-    int32_t oldH = readInt(max, maxH);
-    if (oldW >= w && oldH >= h)
+    int32_t lebarLama = bacaInt(batas, batasLebar);
+    int32_t tinggiLama = bacaInt(batas, batasTinggi);
+    if (lebarLama >= lebar && tinggiLama >= tinggi)
         return;
-    writeInt(max, maxW, w);
-    writeInt(max, maxH, h);
-    writeInt(readPtr(world, worldSizeMulti), multiMax, w * h);
-    LOGI("World size cap raised from %dx%d to %dx%d", oldW, oldH, w, h);
+    tulisInt(batas, batasLebar, lebar);
+    tulisInt(batas, batasTinggi, tinggi);
+    tulisInt(bacaPtr(dunia, multiUkuranDunia), batasMulti, lebar * tinggi);
+    LOGI("Batas ukuran dunia naik dari %dx%d ke %dx%d", lebarLama, tinggiLama, lebar, tinggi);
 }
 
-// The page builds its slider and its current size in this call, so the cap is
-// raised before the original runs and the first open already sees it.
-void capHook(void* self, void* method) {
-    raiseWorldCap(self);
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_WORLD_CAP).orig);
-    if (orig)
-        orig(self, method);
+// Halaman ini menyusun slider dan ukuran saat ini di dalam panggilan ini, jadi
+// batas dinaikkan sebelum fungsi asli berjalan dan bukaan pertama sudah
+// melihatnya.
+void hookBatas(void* self, void* method) {
+    naikkanBatasDunia(self);
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_WORLD_CAP).orig);
+    if (asli)
+        asli(self, method);
 }
 
-bool resolveWorldSize() {
-    if (!resolveField(classOf("UI__Menu__World__New__Setting__Size"), "a", sizeA))
+bool cariFieldUkuranDunia() {
+    if (!cariField(kelasDari("UI__Menu__World__New__Setting__Size"), "a", komponenUkuran))
         return false;
-    void* managerClass = fieldClass(sizeA);
-    if (!resolveField(managerClass, "tile", managerTile))
+    void* kelasManajer = kelasField(komponenUkuran);
+    if (!cariField(kelasManajer, "tile", tileManajer))
         return false;
-    void* tileClass = fieldClass(managerTile);
-    if (!resolveField(tileClass, "_world_Size", tileWorldSize))
+    void* kelasTile = kelasField(tileManajer);
+    if (!cariField(kelasTile, "_world_Size", ukuranDuniaTile))
         return false;
-    void* worldClass = fieldClass(tileWorldSize);
-    if (!resolveField(worldClass, "max", worldSizeMax) ||
-        !resolveField(worldClass, "multi", worldSizeMulti))
+    void* kelasDunia = kelasField(ukuranDuniaTile);
+    if (!cariField(kelasDunia, "max", batasUkuranDunia) ||
+        !cariField(kelasDunia, "multi", multiUkuranDunia))
         return false;
-    void* maxClass = fieldClass(worldSizeMax);
-    if (!resolveField(maxClass, "w", maxW) || !resolveField(maxClass, "h", maxH) ||
-        !resolveField(maxClass, "_3", maxPreset))
+    void* kelasBatas = kelasField(batasUkuranDunia);
+    if (!cariField(kelasBatas, "w", batasLebar) || !cariField(kelasBatas, "h", batasTinggi) ||
+        !cariField(kelasBatas, "_3", presetTeratas))
         return false;
-    void* presetClass = fieldClass(maxPreset);
-    return resolveField(presetClass, "w", presetW) && resolveField(presetClass, "h", presetH) &&
-           resolveField(fieldClass(worldSizeMulti), "max", multiMax);
+    void* kelasPreset = kelasField(presetTeratas);
+    return cariField(kelasPreset, "w", lebarPreset) &&
+           cariField(kelasPreset, "h", tinggiPreset) &&
+           cariField(kelasField(multiUkuranDunia), "max", batasMulti);
 }
 
 } // namespace
 
-void installMultiplayerHooks() {
-    installHook(target(T_PERMISSION_START), reinterpret_cast<void*>(permissionStartHook));
-    installHook(target(T_PERMISSION_SAVE), reinterpret_cast<void*>(permissionSaveHook));
-    installHook(target(T_ROOM_SIZE), reinterpret_cast<void*>(roomSizeHook));
-    capReady = resolveWorldSize();
-    LOGI("World size fields %s", capReady ? "OK" : "missing, cap stays per device");
-    installHook(target(T_WORLD_CAP), reinterpret_cast<void*>(capHook));
+void pasangHookMultiplayer() {
+    pasangHook(target(T_PERMISSION_START), reinterpret_cast<void*>(hookIzinMulai));
+    pasangHook(target(T_PERMISSION_SAVE), reinterpret_cast<void*>(hookIzinSimpan));
+    pasangHook(target(T_ROOM_SIZE), reinterpret_cast<void*>(hookUkuranRoom));
+    batasSiap = cariFieldUkuranDunia();
+    LOGI("Field ukuran dunia %s", batasSiap ? "OK" : "tidak ada, batas tetap per perangkat");
+    pasangHook(target(T_WORLD_CAP), reinterpret_cast<void*>(hookBatas));
 }

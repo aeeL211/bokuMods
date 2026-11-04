@@ -14,21 +14,21 @@
 #include "toast.h"
 
 #if !defined(__aarch64__)
-#error "Only arm64-v8a is supported"
+#error "Hanya arm64-v8a yang didukung"
 #endif
 
 namespace {
 
-void* worker(void*) {
-    LOGI("Worker start");
-    // JNI_OnLoad runs after the constructor returns, so the activity class may
-    // not be cached yet when this thread starts.
-    for (int i = 0; i < 10 && !unityPlayer(); i++)
+void* pekerja(void*) {
+    LOGI("Pekerja mulai");
+    // JNI_OnLoad berjalan setelah konstruktor kembali, jadi kelas activity bisa
+    // belum tersimpan saat thread ini mulai.
+    for (int i = 0; i < 10 && !kelasUnityPlayer(); i++)
         usleep(100000);
-    logEnvironment();
-    if (!initProtection())
+    catatLingkungan();
+    if (!inisialisasiProteksi())
         return nullptr;
-    if (!initShadowHook())
+    if (!inisialisasiShadowHook())
         return nullptr;
 
     for (int i = 0; i < 120 && !dlopen("libil2cpp.so", RTLD_LAZY | RTLD_NOLOAD); i++) {
@@ -36,78 +36,79 @@ void* worker(void*) {
     }
     sleep(2);
 
-    if (!bindApi()) {
-        LOGE("IL2CPP API not found");
+    if (!ikatApi()) {
+        LOGE("API IL2CPP tidak ditemukan");
         return nullptr;
     }
-    // Unity installs its own handlers during startup, so take over only after it
-    // has finished and chain back to it from the crash handler. The probes are
-    // installed after the module table they are resolved through is snapshotted.
-    installCrashLog();
-    installCrashProbes();
-    LOGI("IL2CPP API bound");
+    // Unity memasang penangannya sendiri saat startup, jadi ambil alih hanya
+    // setelah itu selesai dan sambungkan kembali ke sana dari penangan crash.
+    // Probe dipasang setelah tabel modul yang dipakai untuk menyelesaikannya
+    // dipotret.
+    pasangLogCrash();
+    pasangProbeCrash();
+    LOGI("API IL2CPP terikat");
 
-    void* dom = nullptr;
-    for (int i = 0; i < 60 && !(dom = il2cppApi().domain()); i++) {
+    void* domain = nullptr;
+    for (int i = 0; i < 60 && !(domain = apiIl2cpp().domain()); i++) {
         sleep(1);
     }
-    if (!dom) {
-        LOGE("IL2CPP domain not ready");
+    if (!domain) {
+        LOGE("Domain IL2CPP belum siap");
         return nullptr;
     }
 
-    LOGI("Domain ready, scanning");
-    il2cppApi().attach(dom);
-    int found = scan();
-    LOGI("Scan done: found %d of %d methods", found, T_COUNT);
+    LOGI("Domain siap, scan dimulai");
+    apiIl2cpp().attach(domain);
+    int ditemukan = scan();
+    LOGI("Scan selesai: %d dari %d metode ditemukan", ditemukan, T_COUNT);
 
-    installIapHooks();
-    installMultiplayerHooks();
-    installChatHooks();
-    installSensitiveHooks();
-    installTextInputHooks();
-    installProfileHooks();
-    installPasswordHooks();
-    installSkinRangeHooks();
-    installAboutHooks();
-    installHandHooks();
-    installFoodHooks();
-    installPrivacyHooks();
-    installAccountHooks();
-    resolveActionInput();
-    installWeaponHooks();
-    installEffectHooks();
-    installKnockbackHooks();
-    installFecesHooks();
-    installSkinHooks();
-    installSlotHooks();
-    installFullControlHooks();
-    LOGI("Hooks installed: %d", installedHooks());
-    loginToast();
+    pasangHookIap();
+    pasangHookMultiplayer();
+    pasangHookChat();
+    pasangHookSensitif();
+    pasangHookInputTeks();
+    pasangHookProfil();
+    pasangHookSandi();
+    pasangHookRentangSkin();
+    pasangHookTentang();
+    pasangHookTangan();
+    pasangHookMakanan();
+    pasangHookPrivasi();
+    pasangHookAkun();
+    cariFieldAksi();
+    pasangHookSenjata();
+    pasangHookEfek();
+    pasangHookTerpental();
+    pasangHookKotoran();
+    pasangHookSkin();
+    pasangHookSlot();
+    pasangHookKontrolPenuh();
+    LOGI("Hook terpasang: %d", jumlahHookTerpasang());
+    toastMasuk();
     return nullptr;
 }
 
 } // namespace
 
-// Exported on purpose: ART looks up JNI_OnLoad in the library it just loaded,
-// so a hidden symbol would fail the load.
+// Sengaja diekspor: ART mencari JNI_OnLoad di library yang baru dimuatnya, jadi
+// simbol tersembunyi akan menggagalkan pemuatan.
 extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, void*) {
-    setJavaVm(vm);
+    setelVmJava(vm);
     JNIEnv* env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
-        cacheUnityPlayer(env);
+        simpanKelasUnityPlayer(env);
     }
-    logOpenFile();
+    bukaFileLog();
     return JNI_VERSION_1_6;
 }
 
-__attribute__((constructor)) static void onLoad() {
-    logOpenFile();
-    LOGI("Library loaded");
+__attribute__((constructor)) static void saatMuat() {
+    bukaFileLog();
+    LOGI("Library dimuat");
     pthread_t t;
-    if (pthread_create(&t, nullptr, worker, nullptr) == 0) {
+    if (pthread_create(&t, nullptr, pekerja, nullptr) == 0) {
         pthread_detach(t);
     } else {
-        LOGE("Thread create failed");
+        LOGE("Thread gagal dibuat");
     }
 }

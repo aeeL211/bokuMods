@@ -8,57 +8,59 @@
 
 namespace {
 
-// Day and month fields open with 2 characters, year with 4.
-int32_t birthdayLengthHook(void*, int32_t, void*) { return INT32_MAX; }
+// Field hari dan bulan terbuka dengan 2 karakter, tahun dengan 4.
+int32_t hookPanjangLahir(void*, int32_t, void*) { return INT32_MAX; }
 
-// Birthday__Refresh_ only shows a value when V <= Limit. The stock month, day
-// and year caps are all lifted, so any number that was typed stays on screen.
-void birthdayHook(void* self, int32_t v, int32_t i, int32_t limit, void* def, void* method) {
-    LOGI("Birthday: v=%d i=%d limit=%d", v, i, limit);
-    if (limit == 12 || limit == 31 || limit == 9999)
-        limit = INT32_MAX;
-    auto orig = reinterpret_cast<void (*)(void*, int32_t, int32_t, int32_t, void*, void*)>(
+// Birthday__Refresh_ hanya menampilkan nilai bila V <= Limit. Batas bulan, hari,
+// dan tahun bawaan semuanya dilonggarkan, jadi angka apa pun yang diketik tetap
+// tampil di layar.
+void hookLahir(void* self, int32_t v, int32_t i, int32_t batas, void* bawaan, void* method) {
+    LOGI("Tanggal lahir: v=%d i=%d batas=%d", v, i, batas);
+    if (batas == 12 || batas == 31 || batas == 9999)
+        batas = INT32_MAX;
+    auto asli = reinterpret_cast<void (*)(void*, int32_t, int32_t, int32_t, void*, void*)>(
         target(T_BIRTHDAY_REFRESH).orig);
-    if (!orig)
+    if (!asli)
         return;
-    orig(self, v, i, limit, def, method);
+    asli(self, v, i, batas, bawaan, method);
 }
 
-// Date_Check(ref Year, ref Month, ref Day) zeroes a year above 9999 and resets
-// a day that does not exist in that month, which is what capped the birthday
-// fields. Skip it only while the birthday field itself is being submitted, so
-// every other caller keeps the stock date validation.
-thread_local bool birthdayEdit = false;
+// Date_Check(ref Year, ref Month, ref Day) menolkan tahun di atas 9999 dan
+// mengatur ulang hari yang tidak ada di bulan itu, yang membuat field tanggal
+// lahir terbatas. Lewati hanya saat field tanggal lahir sendiri sedang dikirim,
+// supaya pemanggil lain tetap memakai validasi tanggal bawaan.
+thread_local bool sedangUbahLahir = false;
 
-void birthdayEndHook(void* self, void* text, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_BIRTHDAY_END).orig);
-    if (!orig)
+void hookAkhirLahir(void* self, void* text, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_BIRTHDAY_END).orig);
+    if (!asli)
         return;
-    birthdayEdit = true;
-    orig(self, text, method);
-    birthdayEdit = false;
+    sedangUbahLahir = true;
+    asli(self, text, method);
+    sedangUbahLahir = false;
 }
 
-void dateCheckHook(int32_t* year, int32_t* month, int32_t* day, void* method) {
-    if (birthdayEdit) {
-        // Nothing is clamped here: an arbitrary day and month is the point of
-        // this bypass, and the labels are text, so no array is indexed by them.
-        LOGI("Birthday: check skipped y=%d m=%d d=%d", year ? *year : -1, month ? *month : -1,
-             day ? *day : -1);
+void hookCekTanggal(int32_t* year, int32_t* month, int32_t* day, void* method) {
+    if (sedangUbahLahir) {
+        // Tidak ada yang dijepit di sini: hari dan bulan bebas memang tujuan
+        // bypass ini, dan labelnya berupa teks, jadi tidak ada array yang
+        // diindeks dengan nilai itu.
+        LOGI("Tanggal lahir: pemeriksaan dilewati y=%d m=%d d=%d", year ? *year : -1,
+             month ? *month : -1, day ? *day : -1);
         return;
     }
-    auto orig =
+    auto asli =
         reinterpret_cast<void (*)(int32_t*, int32_t*, int32_t*, void*)>(target(T_DATE_CHECK).orig);
-    if (!orig)
+    if (!asli)
         return;
-    orig(year, month, day, method);
+    asli(year, month, day, method);
 }
 
 } // namespace
 
-void installProfileHooks() {
-    installHook(target(T_BIRTHDAY_REFRESH), reinterpret_cast<void*>(birthdayHook));
-    installHook(target(T_BIRTHDAY_LENGTH), reinterpret_cast<void*>(birthdayLengthHook));
-    installHook(target(T_BIRTHDAY_END), reinterpret_cast<void*>(birthdayEndHook));
-    installHook(target(T_DATE_CHECK), reinterpret_cast<void*>(dateCheckHook));
+void pasangHookProfil() {
+    pasangHook(target(T_BIRTHDAY_REFRESH), reinterpret_cast<void*>(hookLahir));
+    pasangHook(target(T_BIRTHDAY_LENGTH), reinterpret_cast<void*>(hookPanjangLahir));
+    pasangHook(target(T_BIRTHDAY_END), reinterpret_cast<void*>(hookAkhirLahir));
+    pasangHook(target(T_DATE_CHECK), reinterpret_cast<void*>(hookCekTanggal));
 }

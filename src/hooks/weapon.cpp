@@ -10,266 +10,268 @@
 
 namespace {
 
-Field weaponManagerField = {};
-Field weaponCmnField = {};
-Field stateManagerField = {};
-Field cmnManagerField = {};
-Field cmnHhField = {};
-Field stateField = {};
-Field comboField = {};
-Field rockField = {};
-Field chargeField = {};
-// The runtime charge counter is the 32-bit step count the buster id lookup
-// compares with the configured full step.
-Field stepField = {};
-Field hhRockField = {};
-Field configChargeField = {};
-Field fullStepField = {};
+Field fieldManajerSenjata = {};
+Field fieldSenjataCmn = {};
+Field fieldManajerState = {};
+Field fieldManajerCmn = {};
+Field fieldCmnHh = {};
+Field fieldState = {};
+Field fieldCombo = {};
+Field fieldRock = {};
+Field fieldCharge = {};
+// Penghitung charge runtime adalah jumlah step 32-bit yang dibandingkan
+// pencarian id buster dengan step penuh dari konfigurasi.
+Field fieldStep = {};
+Field fieldHhRock = {};
+Field fieldConfigCharge = {};
+Field fieldStepPenuh = {};
 
-// A held button fires once per window. The stock gun and buster both wait out
-// a long action timer, and the buster can burn its shot interval before the
-// end state starts, after which the held button stops firing.
-constexpr long long kGunCadenceMs = 80;
-constexpr long long kBusterActionMs = 60;
-constexpr long long kBusterCadenceMs = 100;
+// Tombol yang ditahan menembak sekali per jendela. Pistol dan buster bawaan
+// sama-sama menunggu timer aksi yang panjang, dan buster bisa menghabiskan
+// interval tembaknya sebelum state akhir mulai, setelah itu tombol yang ditahan
+// berhenti menembak.
+constexpr long long kIramaPistolMs = 80;
+constexpr long long kAksiBusterMs = 60;
+constexpr long long kIramaBusterMs = 100;
 
-// Every player runs the same state machine, so the cadence follows the player
-// manager. One shared clock would let a guest reset the local button edge.
-struct Cadence {
-    void* manager;
-    long long gunShotMs;
-    long long busterShotMs;
-    bool held;
+// Setiap pemain menjalankan state machine yang sama, jadi iramanya mengikuti
+// manajer pemain. Satu jam bersama akan membuat tamu mereset tepi tombol lokal.
+struct Irama {
+    void* manajer;
+    long long tembakPistolMs;
+    long long tembakBusterMs;
+    bool ditahan;
 };
-constexpr int kCadenceCount = 32;
-Cadence cadences[kCadenceCount] = {};
-int nextCadence = 0;
+constexpr int kJumlahIrama = 32;
+Irama daftarIrama[kJumlahIrama] = {};
+int iramaBerikut = 0;
 
-long long nowMs() {
-    timespec now = {};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return static_cast<long long>(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
+long long sekarangMs() {
+    timespec sekarang = {};
+    clock_gettime(CLOCK_MONOTONIC, &sekarang);
+    return static_cast<long long>(sekarang.tv_sec) * 1000 + sekarang.tv_nsec / 1000000;
 }
 
-Cadence& cadenceFor(void* manager) {
-    Cadence* freeSlot = nullptr;
-    for (Cadence& c : cadences) {
-        if (c.manager == manager)
-            return c;
-        if (!c.manager && !freeSlot)
-            freeSlot = &c;
+Irama& iramaUntuk(void* manajer) {
+    Irama* slotKosong = nullptr;
+    for (Irama& irama : daftarIrama) {
+        if (irama.manajer == manajer)
+            return irama;
+        if (!irama.manajer && !slotKosong)
+            slotKosong = &irama;
     }
 
-    Cadence& slot = freeSlot ? *freeSlot : cadences[nextCadence];
-    nextCadence = (nextCadence + 1) % kCadenceCount;
+    Irama& slot = slotKosong ? *slotKosong : daftarIrama[iramaBerikut];
+    iramaBerikut = (iramaBerikut + 1) % kJumlahIrama;
     slot = {};
-    slot.manager = manager;
+    slot.manajer = manajer;
     return slot;
 }
 
-// True at most once per window, so a held button fires at a fixed rate.
-bool cadenceReady(long long& lastMs, long long cadenceMs) {
-    long long now = nowMs();
-    if (now - lastMs < cadenceMs)
+// Bernilai benar paling sering sekali per jendela, jadi tombol yang ditahan
+// menembak dengan laju tetap.
+bool iramaSiap(long long& terakhirMs, long long iramaMs) {
+    long long sekarang = sekarangMs();
+    if (sekarang - terakhirMs < iramaMs)
         return false;
-    lastMs = now;
+    terakhirMs = sekarang;
     return true;
 }
 
-void* playerState(void* self, const Field& managerField) {
-    void* manager = readPtr(self, managerField);
-    return readPtr(manager, stateField);
+void* statePemain(void* sendiri, const Field& bidangManajer) {
+    void* manajer = bacaPtr(sendiri, bidangManajer);
+    return bacaPtr(manajer, fieldState);
 }
 
-// The state update repeats a shot only while its combo flag is set, and the
-// flag follows the held button. Writing it before the stock update lets every
-// stance repeat, standing or moving.
-void syncCombo(void* manager) {
-    void* state = readPtr(manager, stateField);
+// Update state mengulang tembakan hanya selama flag combo-nya menyala, dan flag
+// itu mengikuti tombol yang ditahan. Menulisnya sebelum update bawaan membuat
+// semua gaya berdiri maupun bergerak ikut mengulang.
+void selaraskanCombo(void* manajer) {
+    void* state = bacaPtr(manajer, fieldState);
     if (state)
-        writeBool(state, comboField, actionHeld(manager));
+        tulisBool(state, fieldCombo, tombolAksiDitekan(manajer));
 }
 
-// The button press starts the stock shot, so the cadence counts from here and
-// the first forced repeat lands one window later instead of firing at once.
-void stateUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_STATE_UPDATE).orig);
-    if (!orig)
+// Tekanan tombol memulai tembakan bawaan, jadi irama dihitung dari sini dan
+// pengulangan paksa pertama jatuh satu jendela kemudian, bukan seketika.
+void hookUpdateState(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_STATE_UPDATE).orig);
+    if (!asli)
         return;
 
-    void* manager = readPtr(self, stateManagerField);
-    Cadence& cadence = cadenceFor(manager);
-    bool held = actionHeld(manager);
-    if (held && !cadence.held) {
-        cadence.gunShotMs = nowMs();
-        cadence.busterShotMs = cadence.gunShotMs;
+    void* manajer = bacaPtr(sendiri, fieldManajerState);
+    Irama& irama = iramaUntuk(manajer);
+    bool ditahan = tombolAksiDitekan(manajer);
+    if (ditahan && !irama.ditahan) {
+        irama.tembakPistolMs = sekarangMs();
+        irama.tembakBusterMs = irama.tembakPistolMs;
     }
-    cadence.held = held;
-    orig(self, method);
+    irama.ditahan = ditahan;
+    asli(sendiri, metode);
 }
 
-// The gun end state is a fixed timer. Ending it on the first update removes the
-// pause between shots; the action phase still plays the muzzle and bullet.
-bool gunEndHook(void*, void*) { return true; }
+// State akhir pistol adalah timer tetap. Mengakhirinya pada update pertama
+// menghilangkan jeda antar tembakan; fase aksi tetap memutar muzzle dan peluru.
+bool hookAkhirPistol(void*, void*) { return true; }
 
-// The stock gun action ends only after the second frame plus the action timer.
-// Answering yes on a short cadence while the button is held fires again before
-// that timer would let the stock path through.
-bool gunActionEndHook(void* self, int img, void* method) {
-    auto orig = reinterpret_cast<bool (*)(void*, int, void*)>(target(T_GUN_ACTION_END).orig);
-    if (!orig)
+// Aksi pistol bawaan hanya berakhir setelah frame kedua plus timer aksi.
+// Menjawab ya pada irama pendek selama tombol ditahan menembak lagi sebelum
+// timer itu membiarkan jalur bawaan lewat.
+bool hookAkhirAksiPistol(void* sendiri, int gambar, void* metode) {
+    auto asli = reinterpret_cast<bool (*)(void*, int, void*)>(target(T_GUN_ACTION_END).orig);
+    if (!asli)
         return false;
 
-    void* manager = readPtr(self, cmnManagerField);
-    Cadence& cadence = cadenceFor(manager);
-    if (orig(self, img, method)) {
-        if (actionHeld(manager))
-            cadence.gunShotMs = nowMs();
+    void* manajer = bacaPtr(sendiri, fieldManajerCmn);
+    Irama& irama = iramaUntuk(manajer);
+    if (asli(sendiri, gambar, metode)) {
+        if (tombolAksiDitekan(manajer))
+            irama.tembakPistolMs = sekarangMs();
         return true;
     }
-    if (!actionHeld(manager))
+    if (!tombolAksiDitekan(manajer))
         return false;
-    return cadenceReady(cadence.gunShotMs, kGunCadenceMs);
+    return iramaSiap(irama.tembakPistolMs, kIramaPistolMs);
 }
 
-// Keep the combo flag current during the gun action, then run the stock update.
-void gunUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_GUN_UPDATE).orig);
-    if (!orig)
+// Jaga flag combo tetap mutakhir selama aksi pistol, lalu jalankan update bawaan.
+void hookUpdatePistol(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_GUN_UPDATE).orig);
+    if (!asli)
         return;
 
-    syncCombo(readPtr(self, weaponManagerField));
-    orig(self, method);
+    selaraskanCombo(bacaPtr(sendiri, fieldManajerSenjata));
+    asli(sendiri, metode);
 }
 
-// The same sync during the buster action.
-void busterUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_UPDATE).orig);
-    if (!orig)
+// Penyelerasan yang sama selama aksi buster.
+void hookUpdateBuster(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_UPDATE).orig);
+    if (!asli)
         return;
 
-    syncCombo(readPtr(self, weaponManagerField));
-    orig(self, method);
+    selaraskanCombo(bacaPtr(sendiri, fieldManajerSenjata));
+    asli(sendiri, metode);
 }
 
-// Every stance ends the buster action through this check, which waits out a
-// long action timer. Ending it one action window after the shot starts keeps
-// the muzzle and effect frames while removing the rest of the wait.
-bool busterActionEndHook(void* self, void* method) {
-    auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_ACTION_END).orig);
-    if (!orig)
+// Setiap gaya mengakhiri aksi buster lewat pengecekan ini, yang menunggu timer
+// aksi panjang. Mengakhirinya satu jendela aksi setelah tembakan mulai
+// mempertahankan frame muzzle dan efek sambil membuang sisa penantiannya.
+bool hookAkhirAksiBuster(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_ACTION_END).orig);
+    if (!asli)
         return false;
 
-    void* manager = readPtr(self, cmnManagerField);
-    Cadence& cadence = cadenceFor(manager);
-    if (orig(self, method))
+    void* manajer = bacaPtr(sendiri, fieldManajerCmn);
+    Irama& irama = iramaUntuk(manajer);
+    if (asli(sendiri, metode))
         return true;
-    if (!actionHeld(manager))
+    if (!tombolAksiDitekan(manajer))
         return false;
-    return nowMs() - cadence.busterShotMs >= kBusterActionMs;
+    return sekarangMs() - irama.tembakBusterMs >= kAksiBusterMs;
 }
 
-// The moving stances leave the buster end state through this check, which
-// gives up once the shot interval passed. Answering yes on the cadence keeps
-// the shot going for as long as the button is held.
-bool busterEndToActionHook(void* self, void* method) {
-    auto orig = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_END_TO_ACTION).orig);
-    if (!orig)
+// Gaya bergerak meninggalkan state akhir buster lewat pengecekan ini, yang
+// menyerah begitu interval tembakan lewat. Menjawab ya pada irama membuat
+// tembakan terus berjalan selama tombol ditahan.
+bool hookAkhirKeAksiBuster(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<bool (*)(void*, void*)>(target(T_ROCK_END_TO_ACTION).orig);
+    if (!asli)
         return false;
 
-    void* manager = readPtr(self, cmnManagerField);
-    Cadence& cadence = cadenceFor(manager);
-    if (orig(self, method)) {
-        if (actionHeld(manager))
-            cadence.busterShotMs = nowMs();
+    void* manajer = bacaPtr(sendiri, fieldManajerCmn);
+    Irama& irama = iramaUntuk(manajer);
+    if (asli(sendiri, metode)) {
+        if (tombolAksiDitekan(manajer))
+            irama.tembakBusterMs = sekarangMs();
         return true;
     }
-    if (!actionHeld(manager))
+    if (!tombolAksiDitekan(manajer))
         return false;
-    return cadenceReady(cadence.busterShotMs, kBusterCadenceMs);
+    return iramaSiap(irama.tembakBusterMs, kIramaBusterMs);
 }
 
-// The standing buster refires inside its own end update. Holding that update
-// until the cadence is due and then starting the action keeps the same rate,
-// and the stock path still runs whenever the button is released.
-void busterEndUpdateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_END_UPDATE).orig);
-    if (!orig)
+// Buster berdiri menembak ulang di dalam update akhirnya sendiri. Menahan update
+// itu sampai iramanya jatuh tempo lalu memulai aksinya menjaga laju yang sama,
+// dan jalur bawaan tetap berjalan setiap kali tombol dilepas.
+void hookUpdateAkhirBuster(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_ROCK_END_UPDATE).orig);
+    if (!asli)
         return;
 
-    auto endDir = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_END_DIR).addr);
-    auto action = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_ROCK_ACTION).addr);
-    void* manager = readPtr(self, weaponManagerField);
-    void* cmn = readPtr(self, weaponCmnField);
-    if (!endDir || !action || !cmn || !actionHeld(manager)) {
-        orig(self, method);
+    auto arahAkhir = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_END_DIR).addr);
+    auto aksi = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_ROCK_ACTION).addr);
+    void* manajer = bacaPtr(sendiri, fieldManajerSenjata);
+    void* cmn = bacaPtr(sendiri, fieldSenjataCmn);
+    if (!arahAkhir || !aksi || !cmn || !tombolAksiDitekan(manajer)) {
+        asli(sendiri, metode);
         return;
     }
 
-    Cadence& cadence = cadenceFor(manager);
-    if (!cadenceReady(cadence.busterShotMs, kBusterCadenceMs))
+    Irama& irama = iramaUntuk(manajer);
+    if (!iramaSiap(irama.tembakBusterMs, kIramaBusterMs))
         return;
 
-    action(self, endDir(cmn, target(T_ROCK_END_DIR).method), target(T_ROCK_ACTION).method);
+    aksi(sendiri, arahAkhir(cmn, target(T_ROCK_END_DIR).method), target(T_ROCK_ACTION).method);
 }
 
-// The id lookup returns the charged projectile only when the runtime charge
-// step equals the configured full step. Writing that step before the lookup
-// makes every shot use the strongest ammo.
-int32_t busterIdHook(void* self, void* method) {
-    auto orig = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_ID).orig);
-    if (!orig)
+// Pencarian id hanya mengembalikan proyektil terisi bila step charge runtime
+// sama dengan step penuh dari konfigurasi. Menulis step itu sebelum pencarian
+// membuat setiap tembakan memakai amunisi terkuat.
+int32_t hookIdBuster(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<int32_t (*)(void*, void*)>(target(T_ROCK_ID).orig);
+    if (!asli)
         return 0;
 
-    void* state = playerState(self, cmnManagerField);
-    void* rock = readPtr(state, rockField);
-    void* charge = readPtr(rock, chargeField);
-    void* hh = readPtr(self, cmnHhField);
-    void* config = readPtr(hh, hhRockField);
-    void* configCharge = readPtr(config, configChargeField);
-    if (charge && configCharge)
-        writeInt(charge, stepField, readInt(configCharge, fullStepField));
+    void* state = statePemain(sendiri, fieldManajerCmn);
+    void* rock = bacaPtr(state, fieldRock);
+    void* charge = bacaPtr(rock, fieldCharge);
+    void* hh = bacaPtr(sendiri, fieldCmnHh);
+    void* config = bacaPtr(hh, fieldHhRock);
+    void* chargeConfig = bacaPtr(config, fieldConfigCharge);
+    if (charge && chargeConfig)
+        tulisInt(charge, fieldStep, bacaInt(chargeConfig, fieldStepPenuh));
 
-    return orig(self, method);
+    return asli(sendiri, metode);
 }
 
-bool resolveWeaponFields() {
-    void* cmn = classOf("Player__State__Cmn");
-    void* weapon = classOf("Player__State__Std__Action__Hh__Weapon");
-    void* stateManager = classOf("Player__State");
-    return resolveField(stateManager, "m", stateManagerField) &&
-           resolveField(weapon, "m", weaponManagerField) &&
-           resolveField(weapon, "cmn", weaponCmnField) && resolveField(cmn, "m", cmnManagerField) &&
-           resolveField(cmn, "chr_Hh", cmnHhField) &&
-           resolveField(fieldClass(weaponManagerField), "__state", stateField) &&
-           resolveField(fieldClass(stateField), "combo", comboField) &&
-           resolveField(fieldClass(stateField), "_rockman__Rock_Buster", rockField) &&
-           resolveField(fieldClass(rockField), "charge", chargeField) &&
-           resolveField(fieldClass(chargeField), "step", stepField) &&
-           resolveField(fieldClass(cmnHhField), "_rockman__Rock_Buster", hhRockField) &&
-           resolveField(fieldClass(hhRockField), "charge", configChargeField) &&
-           resolveField(fieldClass(configChargeField), "step__Full", fullStepField);
+bool cariFieldSenjata() {
+    void* cmn = kelasDari("Player__State__Cmn");
+    void* senjata = kelasDari("Player__State__Std__Action__Hh__Weapon");
+    void* manajerState = kelasDari("Player__State");
+    return cariField(manajerState, "m", fieldManajerState) &&
+           cariField(senjata, "m", fieldManajerSenjata) &&
+           cariField(senjata, "cmn", fieldSenjataCmn) &&
+           cariField(cmn, "m", fieldManajerCmn) && cariField(cmn, "chr_Hh", fieldCmnHh) &&
+           cariField(kelasField(fieldManajerSenjata), "__state", fieldState) &&
+           cariField(kelasField(fieldState), "combo", fieldCombo) &&
+           cariField(kelasField(fieldState), "_rockman__Rock_Buster", fieldRock) &&
+           cariField(kelasField(fieldRock), "charge", fieldCharge) &&
+           cariField(kelasField(fieldCharge), "step", fieldStep) &&
+           cariField(kelasField(fieldCmnHh), "_rockman__Rock_Buster", fieldHhRock) &&
+           cariField(kelasField(fieldHhRock), "charge", fieldConfigCharge) &&
+           cariField(kelasField(fieldConfigCharge), "step__Full", fieldStepPenuh);
 }
 
 } // namespace
 
-void installWeaponHooks() {
-    if (!resolveWeaponFields()) {
-        LOGE("Weapon fields not found; weapons stay stock");
+void pasangHookSenjata() {
+    if (!cariFieldSenjata()) {
+        LOGE("Field senjata tidak ditemukan; senjata tetap vanilla");
         return;
     }
-    LOGI("Weapon fields OK");
+    LOGI("Field senjata siap");
 
     if (!target(T_ROCK_ACTION).addr || !target(T_ROCK_END_DIR).addr)
-        LOGE("Buster refire methods not found; standing buster stays stock");
+        LOGE("Method tembak ulang buster tidak ditemukan; buster berdiri tetap vanilla");
 
-    installHook(target(T_STATE_UPDATE), reinterpret_cast<void*>(stateUpdateHook));
-    installHook(target(T_GUN_END), reinterpret_cast<void*>(gunEndHook));
-    installHook(target(T_GUN_ACTION_END), reinterpret_cast<void*>(gunActionEndHook));
-    installHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(gunUpdateHook));
-    installHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(busterUpdateHook));
-    installHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(busterActionEndHook));
-    installHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(busterEndUpdateHook));
-    installHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(busterEndToActionHook));
-    installHook(target(T_ROCK_ID), reinterpret_cast<void*>(busterIdHook));
+    pasangHook(target(T_STATE_UPDATE), reinterpret_cast<void*>(hookUpdateState));
+    pasangHook(target(T_GUN_END), reinterpret_cast<void*>(hookAkhirPistol));
+    pasangHook(target(T_GUN_ACTION_END), reinterpret_cast<void*>(hookAkhirAksiPistol));
+    pasangHook(target(T_GUN_UPDATE), reinterpret_cast<void*>(hookUpdatePistol));
+    pasangHook(target(T_ROCK_UPDATE), reinterpret_cast<void*>(hookUpdateBuster));
+    pasangHook(target(T_ROCK_ACTION_END), reinterpret_cast<void*>(hookAkhirAksiBuster));
+    pasangHook(target(T_ROCK_END_UPDATE), reinterpret_cast<void*>(hookUpdateAkhirBuster));
+    pasangHook(target(T_ROCK_END_TO_ACTION), reinterpret_cast<void*>(hookAkhirKeAksiBuster));
+    pasangHook(target(T_ROCK_ID), reinterpret_cast<void*>(hookIdBuster));
 }

@@ -3,8 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
-// The IL2CPP function table is bound once by bindApi(). It is reached through
-// an accessor so no mutable table lives at file scope.
+// Tabel fungsi IL2CPP diikat sekali oleh ikatApi(). Tabel itu diambil lewat
+// sebuah fungsi pengambil supaya tidak ada tabel yang bisa berubah di lingkup
+// berkas.
 struct Api {
     void* (*domain)();
     void** (*assemblies)(void*, size_t*);
@@ -30,48 +31,50 @@ struct Api {
     void* (*stringNewUtf16)(const uint16_t*, int32_t);
 };
 
-Api& il2cppApi();
+Api& apiIl2cpp();
 
-bool bindApi();
+bool ikatApi();
 
-// The same simple name can exist in several assemblies, so a class is only
-// accepted once one of its methods with the exact name and arity has matched.
-void* classOf(const char* name);
-void bindClass(const char* name, void* klass);
+// Nama sederhana yang sama bisa ada di beberapa assembly, jadi sebuah kelas baru
+// diterima setelah salah satu metodenya cocok dengan nama dan jumlah argumen
+// yang diminta.
+void* kelasDari(const char* nama);
+void ikatKelas(const char* nama, void* kelas);
 
 struct Field {
     void* field;
     size_t offset;
 };
 
-bool resolveField(void* klass, const char* name, Field& out);
-void* fieldClass(const Field& f);
-// For an array field this returns the element class, not the array class.
-void* fieldElementClass(const Field& f);
+bool cariField(void* kelas, const char* nama, Field& hasil);
+void* kelasField(const Field& bidang);
+// Untuk field array, fungsi ini mengembalikan kelas elemennya, bukan kelas array-nya.
+void* kelasElemenField(const Field& bidang);
 
-void* readPtr(void* obj, const Field& f);
-int32_t readInt(void* obj, const Field& f);
-void writeInt(void* obj, const Field& f, int32_t value);
-float readFloat(void* obj, const Field& f);
-void writeFloat(void* obj, const Field& f, float value);
-bool readBool(void* obj, const Field& f);
-void writeBool(void* obj, const Field& f, bool value);
-void setRef(void* obj, const Field& f, void* value);
+void* bacaPtr(void* objek, const Field& bidang);
+int32_t bacaInt(void* objek, const Field& bidang);
+void tulisInt(void* objek, const Field& bidang, int32_t nilai);
+float bacaFloat(void* objek, const Field& bidang);
+void tulisFloat(void* objek, const Field& bidang, float nilai);
+bool bacaBool(void* objek, const Field& bidang);
+void tulisBool(void* objek, const Field& bidang, bool nilai);
+void setelRef(void* objek, const Field& bidang, void* nilai);
 
-int32_t arrayLength(void* arr);
-char* arrayData(void* arr);
-int32_t stringLength(void* str);
-const uint16_t* stringChars(void* str);
-// Two IL2CPP strings compared by value; null on either side is never equal.
-bool sameString(void* a, void* b);
-void* newUtf16String(const uint16_t* chars, int32_t len);
-// IL2CPP text is UTF-16, but log lines and file paths are UTF-8.
-bool toUtf8(void* str, char* out, size_t size);
-void* staticFieldData(void* klass);
+int32_t panjangArray(void* array);
+char* dataArray(void* array);
+int32_t panjangString(void* teks);
+const uint16_t* karakterString(void* teks);
+// Dua string IL2CPP dibandingkan berdasarkan nilai; null di salah satu sisi
+// tidak pernah dianggap sama.
+bool samaString(void* pertama, void* kedua);
+void* stringUtf16Baru(const uint16_t* karakter, int32_t panjang);
+// Teks IL2CPP memakai UTF-16, sedangkan baris log dan path file memakai UTF-8.
+bool keUtf8(void* teks, char* keluaran, size_t ukuran);
+void* dataFieldStatis(void* kelas);
 
-bool nearValue(float value, float target);
+bool dekatNilai(float nilai, float target);
 
-// The runtime MethodInfo starts with the resolved code pointer.
-void* methodAddr(void* m);
-// A method that is just "return" has no body worth hooking.
-bool hasBody(void* a);
+// MethodInfo runtime diawali oleh pointer kode hasil pencarian.
+void* alamatMethod(void* metode);
+// Method yang isinya hanya "return" tidak punya badan yang layak dipasangi hook.
+bool punyaBadan(void* alamat);

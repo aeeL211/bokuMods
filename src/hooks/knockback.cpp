@@ -7,12 +7,13 @@
 
 namespace {
 
-// Explosions call this to tumble the local player away from the blast. Dropping
-// the call leaves the player standing while the tiles and effects still break.
-void tumbleHook(void*, int32_t, float, float, int32_t, void*) {}
+// Ledakan memanggil ini untuk membuat pemain lokal terpental menjauh dari titik
+// ledakan. Membuang panggilannya membuat pemain tetap berdiri sementara tile dan
+// efeknya tetap pecah.
+void hookTerpental(void*, int32_t, float, float, int32_t, void*) {}
 
 } // namespace
 
-void installKnockbackHooks() {
-    installHook(target(T_TUMBLE_EXPLODE), reinterpret_cast<void*>(tumbleHook));
+void pasangHookTerpental() {
+    pasangHook(target(T_TUMBLE_EXPLODE), reinterpret_cast<void*>(hookTerpental));
 }

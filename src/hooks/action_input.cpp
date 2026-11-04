@@ -5,30 +5,30 @@
 
 namespace {
 
-Field inputField = {};
-Field inputManagerField = {};
-Field actionField = {};
-Field keepField = {};
+Field fieldInput = {};
+Field fieldManajerInput = {};
+Field fieldAksi = {};
+Field fieldTahan = {};
 
 } // namespace
 
-// The interaction button is held while its input object keeps the action.
-bool actionHeld(void* manager) {
-    void* input = readPtr(manager, inputField);
-    void* inputManager = readPtr(input, inputManagerField);
-    void* action = readPtr(inputManager, actionField);
-    return action && readBool(action, keepField);
+// Tombol interaksi sedang ditahan selama objek input-nya menyimpan aksi.
+bool tombolAksiDitekan(void* manager) {
+    void* input = bacaPtr(manager, fieldInput);
+    void* manajerInput = bacaPtr(input, fieldManajerInput);
+    void* aksi = bacaPtr(manajerInput, fieldAksi);
+    return aksi && bacaBool(aksi, fieldTahan);
 }
 
-// Shared by every feature that repeats its action while the button is held.
-void resolveActionInput() {
-    void* managerClass = classOf("Player__Manager");
-    bool ok = resolveField(managerClass, "input", inputField) &&
-              resolveField(fieldClass(inputField), "input", inputManagerField) &&
-              resolveField(fieldClass(inputManagerField), "action", actionField) &&
-              resolveField(fieldClass(actionField), "keep", keepField);
+// Dipakai bersama oleh setiap fitur yang mengulang aksinya selama tombol ditahan.
+void cariFieldAksi() {
+    void* kelasManajer = kelasDari("Player__Manager");
+    bool ok = cariField(kelasManajer, "input", fieldInput) &&
+              cariField(kelasField(fieldInput), "input", fieldManajerInput) &&
+              cariField(kelasField(fieldManajerInput), "action", fieldAksi) &&
+              cariField(kelasField(fieldAksi), "keep", fieldTahan);
     if (ok)
-        LOGI("Action input fields OK");
+        LOGI("Field input aksi OK");
     else
-        LOGE("Action input fields not found; held-button repeats stay off");
+        LOGE("Field input aksi tidak ditemukan; ulangan tombol tahan tetap mati");
 }

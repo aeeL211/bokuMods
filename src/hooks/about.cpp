@@ -10,82 +10,83 @@
 
 namespace {
 
-// Every version label the player can open is filled from one of these methods:
-// the About page, the title screen and the multiplayer help page. The suffix is
-// added to the stock text, so the build is marked as modded without hiding the
-// version the game reports.
-constexpr char kModSuffix[] = " (modded)";
+// Setiap label versi yang bisa dibuka pemain diisi dari salah satu metode ini:
+// halaman Tentang, layar judul, dan halaman bantuan multiplayer. Akhiran
+// ditambahkan ke teks bawaan, jadi build ini ditandai modded tanpa
+// menyembunyikan versi yang dilaporkan game.
+constexpr char kAkhiranMod[] = " (modded)";
 
-// A version string is short; a longer one means something unexpected is on the
-// other end, so it is left alone instead of being copied blindly.
-constexpr int32_t kMaxVersionLen = 240;
+// String versi itu pendek; yang lebih panjang berarti ada sesuatu yang tidak
+// terduga di ujungnya, jadi dibiarkan apa adanya daripada disalin mentah.
+constexpr int32_t kBatasVersi = 240;
 
-using VersionHook = void* (*)(void*, void*);
+using HookVersi = void* (*)(void*, void*);
 
-bool hasText(void* str, const char* needle) {
-    const uint16_t* chars = stringChars(str);
-    int32_t len = stringLength(str);
-    size_t n = strlen(needle);
-    if (!chars || static_cast<size_t>(len) < n)
+bool adaTeks(void* str, const char* jarum) {
+    const uint16_t* karakter = karakterString(str);
+    int32_t panjang = panjangString(str);
+    size_t ukuranJarum = strlen(jarum);
+    if (!karakter || static_cast<size_t>(panjang) < ukuranJarum)
         return false;
-    for (int32_t i = 0; i + static_cast<int32_t>(n) <= len; i++) {
+    for (int32_t i = 0; i + static_cast<int32_t>(ukuranJarum) <= panjang; i++) {
         size_t j = 0;
-        while (j < n && chars[i + j] == static_cast<uint16_t>(needle[j]))
+        while (j < ukuranJarum && karakter[i + j] == static_cast<uint16_t>(jarum[j]))
             j++;
-        if (j == n)
+        if (j == ukuranJarum)
             return true;
     }
     return false;
 }
 
-// Returns the stock text with kModSuffix appended, or the stock text itself when
-// it already carries the suffix, is empty, or is too long to be a version label.
-void* markVersion(void* stock, const char* label) {
-    if (!stock || !stringChars(stock))
-        return stock;
-    if (hasText(stock, kModSuffix))
-        return stock;
+// Mengembalikan teks bawaan dengan kAkhiranMod ditambahkan, atau teks bawaan itu
+// sendiri bila sudah membawa akhiran, kosong, atau terlalu panjang untuk sebuah
+// label versi.
+void* tandaiVersi(void* bawaan, const char* label) {
+    if (!bawaan || !karakterString(bawaan))
+        return bawaan;
+    if (adaTeks(bawaan, kAkhiranMod))
+        return bawaan;
 
-    int32_t len = stringLength(stock);
-    const uint16_t* chars = stringChars(stock);
-    if (!chars || len <= 0 || len > kMaxVersionLen)
-        return stock;
+    int32_t panjang = panjangString(bawaan);
+    const uint16_t* karakter = karakterString(bawaan);
+    if (!karakter || panjang <= 0 || panjang > kBatasVersi)
+        return bawaan;
 
-    uint16_t buffer[kMaxVersionLen + sizeof(kModSuffix)];
-    int32_t used = 0;
-    for (int32_t i = 0; i < len; i++)
-        buffer[used++] = chars[i];
-    for (size_t i = 0; i + 1 < sizeof(kModSuffix); i++)
-        buffer[used++] = static_cast<uint16_t>(kModSuffix[i]);
+    uint16_t buffer[kBatasVersi + sizeof(kAkhiranMod)];
+    int32_t terpakai = 0;
+    for (int32_t i = 0; i < panjang; i++)
+        buffer[terpakai++] = karakter[i];
+    for (size_t i = 0; i + 1 < sizeof(kAkhiranMod); i++)
+        buffer[terpakai++] = static_cast<uint16_t>(kAkhiranMod[i]);
 
-    void* marked = newUtf16String(buffer, used);
-    if (!marked)
-        return stock;
-    LOGI("%s: version suffix added, len=%d", label, used);
-    return marked;
+    void* ditandai = stringUtf16Baru(buffer, terpakai);
+    if (!ditandai)
+        return bawaan;
+    LOGI("%s: akhiran versi ditambahkan, panjang=%d", label, terpakai);
+    return ditandai;
 }
 
-VersionHook origOf(TargetId id) { return reinterpret_cast<VersionHook>(target(id).orig); }
+HookVersi asliDari(TargetId id) { return reinterpret_cast<HookVersi>(target(id).orig); }
 
-void* aboutHook(void* self, void* method) {
-    VersionHook orig = origOf(T_ABOUT_VERSION);
-    return orig ? markVersion(orig(self, method), "About") : nullptr;
+void* hookTentang(void* self, void* method) {
+    HookVersi asli = asliDari(T_ABOUT_VERSION);
+    return asli ? tandaiVersi(asli(self, method), "Tentang") : nullptr;
 }
 
-void* titleHook(void* self, void* method) {
-    VersionHook orig = origOf(T_TITLE_VERSION);
-    return orig ? markVersion(orig(self, method), "Title") : nullptr;
+void* hookJudul(void* self, void* method) {
+    HookVersi asli = asliDari(T_TITLE_VERSION);
+    return asli ? tandaiVersi(asli(self, method), "Judul") : nullptr;
 }
 
-void* helpHook(void* self, void* method) {
-    VersionHook orig = origOf(T_HELP_VERSION);
-    return orig ? markVersion(orig(self, method), "Help") : nullptr;
+void* hookBantuan(void* self, void* method) {
+    HookVersi asli = asliDari(T_HELP_VERSION);
+    return asli ? tandaiVersi(asli(self, method), "Bantuan") : nullptr;
 }
 
 } // namespace
 
-void installAboutHooks() {
-    installHook(target(T_ABOUT_VERSION), reinterpret_cast<void*>(aboutHook));
-    installHook(target(T_TITLE_VERSION), reinterpret_cast<void*>(titleHook));
-    installHook(target(T_HELP_VERSION), reinterpret_cast<void*>(helpHook));
+void pasangHookTentang() {
+    pasangHook(target(T_ABOUT_VERSION), reinterpret_cast<void*>(hookTentang));
+    pasangHook(target(T_TITLE_VERSION), reinterpret_cast<void*>(hookJudul));
+    pasangHook(target(T_HELP_VERSION), reinterpret_cast<void*>(hookBantuan));
 }

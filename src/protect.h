@@ -1,6 +1,6 @@
 #pragma once
 
-// Checks the library name, decrypts the target table and verifies the build's
-// integrity hash. Returns false when the environment does not match the build,
-// in which case the caller must leave the game untouched.
-bool initProtection();
+// Memeriksa nama pustaka, mendekripsi tabel target, dan memverifikasi hash
+// integritas build. Mengembalikan false bila lingkungan tidak cocok dengan build,
+// dan dalam hal itu pemanggil harus membiarkan game tidak tersentuh.
+bool inisialisasiProteksi();

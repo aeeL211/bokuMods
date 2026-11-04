@@ -1,34 +1,34 @@
 #pragma once
 
-void installIapHooks();
-void installMultiplayerHooks();
-void installChatHooks();
-void installSensitiveHooks();
-void installTextInputHooks();
-void installProfileHooks();
-void installPasswordHooks();
-void installSkinRangeHooks();
-void installAboutHooks();
-void installFoodHooks();
-void installSkinHooks();
-void installPrivacyHooks();
-void installAccountHooks();
-void installWeaponHooks();
-void installEffectHooks();
-void installKnockbackHooks();
-void installFecesHooks();
-void installHandHooks();
-void installSlotHooks();
-void installFullControlHooks();
+void pasangHookIap();
+void pasangHookMultiplayer();
+void pasangHookChat();
+void pasangHookSensitif();
+void pasangHookInputTeks();
+void pasangHookProfil();
+void pasangHookSandi();
+void pasangHookRentangSkin();
+void pasangHookTentang();
+void pasangHookMakanan();
+void pasangHookSkin();
+void pasangHookPrivasi();
+void pasangHookAkun();
+void pasangHookSenjata();
+void pasangHookEfek();
+void pasangHookTerpental();
+void pasangHookKotoran();
+void pasangHookTangan();
+void pasangHookSlot();
+void pasangHookKontrolPenuh();
 
-// True while the interaction button is held for this player.
-bool actionHeld(void* manager);
-void resolveActionInput();
+// Bernilai benar selama tombol interaksi ditahan untuk pemain ini.
+bool tombolAksiDitekan(void* manajer);
+void cariFieldAksi();
 
-// Raised by a feature that keeps its item in hand while the stock call would
-// clear the hand slot.
-void setKeepHand(bool keep);
+// Dinaikkan oleh fitur yang menahan itemnya di tangan padahal panggilan stok
+// akan mengosongkan slot tangan.
+void setelTahanTangan(bool tahan);
 
-// Puts the last held id back into the hand after an eat animation hid the
-// sprite, so the kept food stays visible.
-void refreshHand();
+// Mengembalikan id yang terakhir dipegang ke tangan setelah animasi makan
+// menyembunyikan sprite-nya, jadi makanan yang ditahan tetap terlihat.
+void segarkanTangan();

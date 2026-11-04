@@ -16,525 +16,545 @@
 
 namespace {
 
-using ChatSendFn = bool (*)(void*, void*, bool, void*);
-using SendInputFn = void (*)(void*, void*);
-using KeyFn = void* (*)(void*, void*);
-using KickFn = void (*)(void*, void*, void*);
-using EmptySendFn = void (*)(void*, void*);
-using ClearFn = void (*)(void*, void*);
-using ShakeSendFn = void (*)(void*, float, float, void*);
-using ShakeFn = void (*)(void*, int32_t, float, void*);
-using AddTextFn = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
-using RemoveSendFn = void (*)(void*, void*, void*);
-using LeaveFn = void (*)(void*, int32_t, void*);
+using FnKirimChat = bool (*)(void*, void*, bool, void*);
+using FnKirimInput = void (*)(void*, void*);
+using FnKunci = void* (*)(void*, void*);
+using FnTendang = void (*)(void*, void*, void*);
+using FnKirimKosong = void (*)(void*, void*);
+using FnBersihkan = void (*)(void*, void*);
+using FnKirimGetar = void (*)(void*, float, float, void*);
+using FnGetar = void (*)(void*, int32_t, float, void*);
+using FnTambahTeks = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
+using FnKirimHapus = void (*)(void*, void*, void*);
+using FnKeluar = void (*)(void*, int32_t, void*);
 
-constexpr int kMaxPlayers = 16;
-constexpr int kMaxTokens = 8;
-constexpr int kPageCount = 3;
-constexpr size_t kLineSize = 240;
-constexpr size_t kNameSize = 96;
-constexpr size_t kKeySize = 16;
-constexpr double kShakeGap = 0.2;
-constexpr float kShakeMax = 90.0f;
-constexpr double kKickGap = 0.25;
-constexpr double kKickWindow = 8.0;
-constexpr size_t kKeyChars = 40;
+constexpr int kMaksPemain = 16;
+constexpr int kMaksToken = 8;
+constexpr int kJumlahHalaman = 3;
+constexpr size_t kUkuranBaris = 240;
+constexpr size_t kUkuranNama = 96;
+constexpr size_t kUkuranKunci = 16;
+constexpr double kJedaGetar = 0.2;
+constexpr float kMaksGetar = 90.0f;
+constexpr double kJedaTendang = 0.25;
+constexpr double kJendelaTendang = 8.0;
+constexpr size_t kKarakterKunci = 40;
 
-// The stock explosion shake is the strongest the game configures: eight rounds
-// at the full camera offset. The camera hooks drop every stock call, so the
-// timed shake feeds these values straight to the original.
-constexpr int32_t kShakeRounds = 8;
-constexpr float kShakeOffset = 1.0f;
+// Getaran ledakan bawaan adalah yang terkuat yang dikonfigurasi game: delapan
+// putaran pada offset kamera penuh. Hook kamera membuang setiap panggilan
+// bawaan, jadi getaran berdurasi mengirim nilai ini langsung ke fungsi aslinya.
+constexpr int32_t kPutaranGetar = 8;
+constexpr float kOffsetGetar = 1.0f;
 
-Field chatManager = {};
-Field chatInput = {};
-Field inputText = {};
-Field chatMsg = {};
-Field msgSender = {};
-Field senderSelf = {};
-Field senderOther = {};
-Field chatText = {};
-Field textMe = {};
-Field chatUi = {};
-Field chatMeasure = {};
-Field labelMaxLines = {};
-Field chatMsgs = {};
-Field msgItems = {};
-Field msgCount = {};
-Field msgObj = {};
-Field msgLabel = {};
-Field managerCamera = {};
-Field managerGuests = {};
-Field managerMulti = {};
-Field managerPlayer = {};
-Field guestsItems = {};
-Field guestsSize = {};
-Field guestKey = {};
-Field guestAccount = {};
-Field accountName = {};
-Field playerPhy = {};
-Field multiTransfer = {};
-Field transferPipe = {};
-Field transferHost = {};
-Field multiDisconnect = {};
-Field disconnectState = {};
-Field disconnectHost = {};
-Field physicsPos = {};
-Field posWorld = {};
-Field guestManagerA = {};
-bool ready = false;
-bool linesReady = false;
+Field fieldManajerChat = {};
+Field fieldInputChat = {};
+Field fieldTeksInput = {};
+Field fieldPesanChat = {};
+Field fieldPengirimPesan = {};
+Field fieldPengirimSendiri = {};
+Field fieldPengirimLain = {};
+Field fieldTeksChat = {};
+Field fieldTeksSaya = {};
+Field fieldUiChat = {};
+Field fieldUkurChat = {};
+Field fieldMaksBarisLabel = {};
+Field fieldDaftarPesan = {};
+Field fieldItemPesan = {};
+Field fieldJumlahPesan = {};
+Field fieldObjekPesan = {};
+Field fieldLabelPesan = {};
+Field fieldKameraManajer = {};
+Field fieldTamuManajer = {};
+Field fieldMultiManajer = {};
+Field fieldPemainManajer = {};
+Field fieldItemTamu = {};
+Field fieldUkuranTamu = {};
+Field fieldKunciTamu = {};
+Field fieldAkunTamu = {};
+Field fieldNamaAkun = {};
+Field fieldFisikPemain = {};
+Field fieldTransferMulti = {};
+Field fieldPipeTransfer = {};
+Field fieldHostTransfer = {};
+Field fieldDisconnectMulti = {};
+Field fieldStateDisconnect = {};
+Field fieldHostDisconnect = {};
+Field fieldPosisiFisik = {};
+Field fieldPosisiDunia = {};
+Field fieldManajerTamu = {};
+bool siap = false;
+bool barisSiap = false;
 
-// The timed shake keeps the start instant and the next send instant on a clock
-// the game cannot pause, so a slow frame does not stretch the requested time.
-struct Shake {
-    double next;
-    double end;
-    bool active;
+// Getaran berdurasi menyimpan waktu mulai dan waktu kirim berikutnya pada jam
+// yang tidak bisa dijeda game, jadi frame yang lambat tidak memperpanjang durasi
+// yang diminta.
+struct Getar {
+    double berikut;
+    double akhir;
+    bool aktif;
 };
 
-Shake shake = {};
+Getar getar = {};
 
-// The kick packets are paced one per tick. The queue holds only the target key
-// text taken when the command ran, so nothing in it points at a guest, a chat or
-// a player object that the next room or the next frame could free.
-struct KickAll {
-    bool active;
-    double next;
-    double end;
-    int sent;
-    int nextIndex;
-    int count;
-    char keys[kMaxPlayers][kKeyChars];
+// Paket tendang diberi jeda satu per detak. Antrean hanya menyimpan teks kunci
+// target yang diambil saat perintah berjalan, jadi tidak ada isinya yang
+// menunjuk tamu, chat, atau objek pemain yang bisa dibebaskan room berikutnya
+// atau frame berikutnya.
+struct TendangSemua {
+    bool aktif;
+    double berikut;
+    double akhir;
+    int terkirim;
+    int indeksBerikut;
+    int jumlah;
+    char kunci[kMaksPemain][kKarakterKunci];
 };
 
-KickAll kickAll = {};
+TendangSemua tendangSemua = {};
 
-// A host-only packet passes the receiver because the payload carries the key of
-// the sender, and the receiver only compares that string. The override lives on
-// the sending thread and is cleared as soon as the packet is gone.
-thread_local bool spoofOn = false;
-thread_local void* spoofKey = nullptr;
+// Paket khusus host lolos di penerima karena payload-nya membawa kunci pengirim,
+// dan penerima hanya membandingkan string itu. Penggantian ini hidup di thread
+// pengirim dan dibersihkan begitu paketnya pergi.
+thread_local bool spoofAktif = false;
+thread_local void* kunciSpoof = nullptr;
 
 struct Slot {
-    void* guest;
+    void* tamu;
 };
 
-struct Session {
-    void* manager;
+struct Sesi {
+    void* manajer;
     void* chat;
     void* multi;
-    void* player;
-    void* key;
-    int32_t senderId;
-    bool canReply;
+    void* pemain;
+    void* kunci;
+    int32_t idPengirim;
+    bool bisaJawab;
 };
 
-double nowSeconds() {
+double sekarangDetik() {
     timespec ts = {};
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
 }
 
-void readPoint(void* obj, const Field& f, float& x, float& y) {
+void bacaTitik(void* objek, const Field& bidang, float& x, float& y) {
     x = 0.0f;
     y = 0.0f;
-    if (!obj || !f.field)
+    if (!objek || !bidang.field)
         return;
-    const char* base = reinterpret_cast<const char*>(obj) + f.offset;
-    x = *reinterpret_cast<const float*>(base);
-    y = *reinterpret_cast<const float*>(base + sizeof(float));
+    const char* dasar = reinterpret_cast<const char*>(objek) + bidang.offset;
+    x = *reinterpret_cast<const float*>(dasar);
+    y = *reinterpret_cast<const float*>(dasar + sizeof(float));
 }
 
-// The answer text is UTF-8, because a player name is converted to UTF-8 before it
-// is put in a line, and the chat table stores UTF-16. Copying the bytes one to one
-// turned every non-ASCII name into broken symbols, so the text is decoded here.
-void utf8Step(const char* text, size_t& i, uint32_t& code) {
-    unsigned char lead = static_cast<unsigned char>(text[i]);
-    int extra = 0;
-    if (lead < 0x80) {
-        code = lead;
+// Teks jawaban berformat UTF-8, karena nama pemain diubah ke UTF-8 sebelum
+// dimasukkan ke sebuah baris, sementara tabel chat menyimpan UTF-16. Menyalin
+// byte-nya satu per satu mengubah setiap nama non-ASCII menjadi simbol rusak,
+// jadi teksnya didekode di sini.
+void langkahUtf8(const char* teks, size_t& i, uint32_t& kode) {
+    unsigned char awal = static_cast<unsigned char>(teks[i]);
+    int tambahan = 0;
+    if (awal < 0x80) {
+        kode = awal;
         i += 1;
         return;
     }
-    if ((lead & 0xE0) == 0xC0) {
-        code = lead & 0x1F;
-        extra = 1;
-    } else if ((lead & 0xF0) == 0xE0) {
-        code = lead & 0x0F;
-        extra = 2;
-    } else if ((lead & 0xF8) == 0xF0) {
-        code = lead & 0x07;
-        extra = 3;
+    if ((awal & 0xE0) == 0xC0) {
+        kode = awal & 0x1F;
+        tambahan = 1;
+    } else if ((awal & 0xF0) == 0xE0) {
+        kode = awal & 0x0F;
+        tambahan = 2;
+    } else if ((awal & 0xF8) == 0xF0) {
+        kode = awal & 0x07;
+        tambahan = 3;
     } else {
         i += 1;
-        code = 0xFFFD;
+        kode = 0xFFFD;
         return;
     }
-    for (int k = 1; k <= extra; k++) {
-        unsigned char next = static_cast<unsigned char>(text[i + k]);
-        if ((next & 0xC0) != 0x80) {
+    for (int k = 1; k <= tambahan; k++) {
+        unsigned char lanjut = static_cast<unsigned char>(teks[i + k]);
+        if ((lanjut & 0xC0) != 0x80) {
             i += 1;
-            code = 0xFFFD;
+            kode = 0xFFFD;
             return;
         }
-        code = (code << 6) | (next & 0x3F);
+        kode = (kode << 6) | (lanjut & 0x3F);
     }
-    i += static_cast<size_t>(extra) + 1;
+    i += static_cast<size_t>(tambahan) + 1;
 }
 
-void* utf16Of(const char* text) {
-    uint16_t buf[kLineSize];
+void* utf16Dari(const char* teks) {
+    uint16_t buf[kUkuranBaris];
     size_t n = 0;
-    for (size_t i = 0; text[i] && n + 2 < kLineSize;) {
-        uint32_t code = 0;
-        utf8Step(text, i, code);
-        if (code >= 0x10000) {
-            code -= 0x10000;
-            buf[n++] = static_cast<uint16_t>(0xD800 + (code >> 10));
-            buf[n++] = static_cast<uint16_t>(0xDC00 + (code & 0x3FF));
+    for (size_t i = 0; teks[i] && n + 2 < kUkuranBaris;) {
+        uint32_t kode = 0;
+        langkahUtf8(teks, i, kode);
+        if (kode >= 0x10000) {
+            kode -= 0x10000;
+            buf[n++] = static_cast<uint16_t>(0xD800 + (kode >> 10));
+            buf[n++] = static_cast<uint16_t>(0xDC00 + (kode & 0x3FF));
         } else {
-            buf[n++] = static_cast<uint16_t>(code);
+            buf[n++] = static_cast<uint16_t>(kode);
         }
     }
-    return newUtf16String(buf, static_cast<int32_t>(n));
+    return stringUtf16Baru(buf, static_cast<int32_t>(n));
 }
 
-void stringOf(void* text, char* out, size_t size, const char* fallback) {
-    out[0] = '\0';
-    if (text && toUtf8(text, out, size) && out[0])
+void teksDari(void* teks, char* keluaran, size_t ukuran, const char* cadangan) {
+    keluaran[0] = '\0';
+    if (teks && keUtf8(teks, keluaran, ukuran) && keluaran[0])
         return;
-    snprintf(out, size, "%s", fallback);
+    snprintf(keluaran, ukuran, "%s", cadangan);
 }
 
-void* accountNameOf(void* guest) { return readPtr(readPtr(guest, guestAccount), accountName); }
+void* namaAkunDari(void* tamu) {
+    return bacaPtr(bacaPtr(tamu, fieldAkunTamu), fieldNamaAkun);
+}
 
-void* ownKey(void* player) {
-    auto key = reinterpret_cast<KeyFn>(target(T_PLAYER_KEY).orig);
-    if (!player || !key)
+void* kunciSendiri(void* pemain) {
+    auto kunci = reinterpret_cast<FnKunci>(target(T_PLAYER_KEY).orig);
+    if (!pemain || !kunci)
         return nullptr;
-    return key(player, target(T_PLAYER_KEY).method);
+    return kunci(pemain, target(T_PLAYER_KEY).method);
 }
 
-void* hostKeyOf(void* multi) {
-    auto key = reinterpret_cast<KeyFn>(target(T_HOST_KEY).addr);
-    if (!multi || !key)
+void* kunciHostDari(void* multi) {
+    auto kunci = reinterpret_cast<FnKunci>(target(T_HOST_KEY).addr);
+    if (!multi || !kunci)
         return nullptr;
-    return key(multi, target(T_HOST_KEY).method);
+    return kunci(multi, target(T_HOST_KEY).method);
 }
 
-void startSpoof(void* multi) {
-    spoofKey = hostKeyOf(multi);
-    spoofOn = spoofKey != nullptr;
+void mulaiSpoof(void* multi) {
+    kunciSpoof = kunciHostDari(multi);
+    spoofAktif = kunciSpoof != nullptr;
 }
 
-void stopSpoof() {
-    spoofOn = false;
-    spoofKey = nullptr;
+void hentiSpoof() {
+    spoofAktif = false;
+    kunciSpoof = nullptr;
 }
 
-void* pipeOf(void* multi) { return readPtr(readPtr(multi, multiTransfer), transferPipe); }
+void* pipeDari(void* multi) {
+    return bacaPtr(bacaPtr(multi, fieldTransferMulti), fieldPipeTransfer);
+}
 
-void* hostOf(void* multi) { return readPtr(readPtr(multi, multiTransfer), transferHost); }
+void* hostDari(void* multi) {
+    return bacaPtr(bacaPtr(multi, fieldTransferMulti), fieldHostTransfer);
+}
 
-// The guest list holds the remote players, so the local player is always slot
-// one and the numbers never depend on the room list order the game happens to
-// use. A guest carrying our own key is skipped, in case the game also lists the
-// local player there.
-int collectPlayers(void* chat, void* mine, Slot* out) {
-    void* manager = readPtr(chat, chatManager);
-    void* list = readPtr(manager, managerGuests);
-    void* items = readPtr(list, guestsItems);
+// Daftar tamu berisi pemain jarak jauh, jadi pemain lokal selalu slot satu dan
+// nomornya tidak bergantung pada urutan daftar room yang kebetulan dipakai game.
+// Tamu yang membawa kunci kita sendiri dilewati, kalau-kalau game juga
+// mencantumkan pemain lokal di sana.
+int kumpulkanPemain(void* chat, void* milikku, Slot* hasil) {
+    void* manajer = bacaPtr(chat, fieldManajerChat);
+    void* daftar = bacaPtr(manajer, fieldTamuManajer);
+    void* item = bacaPtr(daftar, fieldItemTamu);
     int n = 0;
-    out[n++].guest = nullptr;
-    if (!items)
+    hasil[n++].tamu = nullptr;
+    if (!item)
         return n;
 
-    int32_t count = readInt(list, guestsSize);
-    int32_t capacity = arrayLength(items);
-    if (count > capacity)
-        count = capacity;
+    int32_t jumlah = bacaInt(daftar, fieldUkuranTamu);
+    int32_t kapasitas = panjangArray(item);
+    if (jumlah > kapasitas)
+        jumlah = kapasitas;
 
-    char* data = arrayData(items);
-    for (int32_t i = 0; i < count && n < kMaxPlayers; i++) {
-        void* guest = *reinterpret_cast<void**>(data + i * sizeof(void*));
-        if (!guest)
+    char* data = dataArray(item);
+    for (int32_t i = 0; i < jumlah && n < kMaksPemain; i++) {
+        void* tamu = *reinterpret_cast<void**>(data + i * sizeof(void*));
+        if (!tamu)
             continue;
-        if (sameString(readPtr(guest, guestKey), mine))
+        if (samaString(bacaPtr(tamu, fieldKunciTamu), milikku))
             continue;
-        out[n++].guest = guest;
+        hasil[n++].tamu = tamu;
     }
     return n;
 }
 
-// A bubble is a prefab instance, so it starts with the prefab's own line cap.
-// The bubble a multi-line answer just added is the last entry of the message
-// list, and lifting its cap keeps the text from being clipped to one line. A
-// missing list or a bubble that is not built yet leaves the cap alone.
-void liftMsgLabel(void* chat) {
-    if (!msgLabel.field)
+// Sebuah bubble adalah instance prefab, jadi ia mulai dengan batas baris milik
+// prefab itu sendiri. Bubble yang baru ditambahi jawaban multi-baris adalah
+// entri terakhir daftar pesan, dan menaikkan batasnya menjaga teks tidak
+// terpotong menjadi satu baris. Daftar yang tidak ada atau bubble yang belum
+// dibangun membiarkan batasnya apa adanya.
+void angkatLabelPesan(void* chat) {
+    if (!fieldLabelPesan.field)
         return;
-    void* list = readPtr(chat, chatMsgs);
-    void* items = readPtr(list, msgItems);
-    int32_t count = readInt(list, msgCount);
-    int32_t capacity = arrayLength(items);
-    if (!items || count < 1 || count > capacity)
+    void* daftar = bacaPtr(chat, fieldDaftarPesan);
+    void* item = bacaPtr(daftar, fieldItemPesan);
+    int32_t jumlah = bacaInt(daftar, fieldJumlahPesan);
+    int32_t kapasitas = panjangArray(item);
+    if (!item || jumlah < 1 || jumlah > kapasitas)
         return;
-    void* msg = *reinterpret_cast<void**>(arrayData(items) + (count - 1) * sizeof(void*));
-    void* label = readPtr(readPtr(msg, msgObj), msgLabel);
-    writeInt(label, labelMaxLines, 0);
+    void* pesan = *reinterpret_cast<void**>(dataArray(item) + (jumlah - 1) * sizeof(void*));
+    void* label = bacaPtr(bacaPtr(pesan, fieldObjekPesan), fieldLabelPesan);
+    tulisInt(label, fieldMaksBarisLabel, 0);
 }
 
-// The room chat draws a line only when its sender id equals _msg.sender.self or
-// _msg.sender.other. A line under the self id is drawn on the right, the side
-// the game keeps for the player's own messages, so an answer is added under the
-// "other" id instead and takes the left layout of a received message. The name
-// the game prints for this player travels with it, because the other layout
-// labels the bubble from the name it is given. A missing field keeps the self
-// line. The bubble is one NGUI label, and NGUI breaks its text at every newline,
-// so a body can hold several lines. Without a message object the answer falls
-// back to a toast instead of going silent.
-int32_t replySender(Session& s) {
-    int32_t other = readInt(readPtr(readPtr(s.chat, chatMsg), msgSender), senderOther);
-    return other > 0 && other != s.senderId ? other : s.senderId;
+// Room chat hanya menggambar baris bila id pengirimnya sama dengan
+// _msg.sender.self atau _msg.sender.other. Baris dengan id self digambar di
+// kanan, sisi yang disediakan game untuk pesan pemain sendiri, jadi jawaban
+// ditambahkan dengan id "other" dan memakai tata letak kiri seperti pesan yang
+// diterima. Nama yang dicetak game untuk pemain ini ikut terbawa, karena tata
+// letak other memberi label bubble dari nama yang diberikan. Field yang tidak
+// ada mempertahankan baris self. Bubble-nya satu label NGUI, dan NGUI memecah
+// teksnya pada setiap newline, jadi satu isi bisa memuat beberapa baris. Tanpa
+// objek pesan, jawaban jatuh ke toast daripada menjadi diam.
+int32_t pengirimJawaban(Sesi& sesi) {
+    int32_t lain = bacaInt(bacaPtr(bacaPtr(sesi.chat, fieldPesanChat), fieldPengirimPesan),
+                           fieldPengirimLain);
+    return lain > 0 && lain != sesi.idPengirim ? lain : sesi.idPengirim;
 }
 
-void* replyName(Session& s) {
-    void* me = readPtr(readPtr(s.chat, chatText), textMe);
-    if (me && stringLength(me) > 0)
-        return me;
-    return s.key ? s.key : utf16Of("");
+void* namaJawaban(Sesi& sesi) {
+    void* saya = bacaPtr(bacaPtr(sesi.chat, fieldTeksChat), fieldTeksSaya);
+    if (saya && panjangString(saya) > 0)
+        return saya;
+    return sesi.kunci ? sesi.kunci : utf16Dari("");
 }
 
-void reply(Session& s, const char* text) {
-    auto add = reinterpret_cast<AddTextFn>(target(T_CHAT_MSG_ADD).addr);
-    if (!s.canReply || !add) {
-        toast(text);
-        return;
-    }
-    void* body = utf16Of(text);
-    void* name = replyName(s);
-    if (!body || !name) {
-        toast(text);
+void jawab(Sesi& sesi, const char* teks) {
+    auto tambah = reinterpret_cast<FnTambahTeks>(target(T_CHAT_MSG_ADD).addr);
+    if (!sesi.bisaJawab || !tambah) {
+        tampilkanToast(teks);
         return;
     }
-    add(s.chat, replySender(s), name, -1, 0, false, body, target(T_CHAT_MSG_ADD).method);
-    if (strchr(text, '\n'))
-        liftMsgLabel(s.chat);
+    void* isi = utf16Dari(teks);
+    void* nama = namaJawaban(sesi);
+    if (!isi || !nama) {
+        tampilkanToast(teks);
+        return;
+    }
+    tambah(sesi.chat, pengirimJawaban(sesi), nama, -1, 0, false, isi,
+           target(T_CHAT_MSG_ADD).method);
+    if (strchr(teks, '\n'))
+        angkatLabelPesan(sesi.chat);
 }
 
-// A command answer reads as one bubble while its lines are packed into one
-// label, so lines are joined with a newline here. The block is cut before it
-// outgrows the UTF-16 text buffer or turns into a bubble taller than the chat
-// panel, so a long answer becomes a few short bubbles instead of one tall one.
-struct Block {
-    char text[kLineSize];
-    size_t len;
-    int lines;
+// Jawaban perintah terbaca sebagai satu bubble selama baris-barisnya
+// dikumpulkan dalam satu label, jadi baris digabung dengan newline di sini. Blok
+// dipotong sebelum melewati buffer teks UTF-16 atau menjadi bubble yang lebih
+// tinggi dari panel chat, jadi jawaban panjang menjadi beberapa bubble pendek
+// daripada satu bubble tinggi.
+struct Blok {
+    char teks[kUkuranBaris];
+    size_t panjang;
+    int baris;
 };
 
-constexpr size_t kBlockChars = 228;
-constexpr int kBlockLines = 6;
+constexpr size_t kKarakterBlok = 228;
+constexpr int kBarisBlok = 6;
 
-void blockReset(Block& block) {
-    block.text[0] = '\0';
-    block.len = 0;
-    block.lines = 0;
+void aturUlangBlok(Blok& blok) {
+    blok.teks[0] = '\0';
+    blok.panjang = 0;
+    blok.baris = 0;
 }
 
-void blockFlush(Session& s, Block& block) {
-    if (block.lines)
-        reply(s, block.text);
-    blockReset(block);
+void siramBlok(Sesi& sesi, Blok& blok) {
+    if (blok.baris)
+        jawab(sesi, blok.teks);
+    aturUlangBlok(blok);
 }
 
-void blockAdd(Session& s, Block& block, const char* line) {
-    size_t add = strlen(line);
-    if (add >= kBlockChars) {
-        blockFlush(s, block);
-        reply(s, line);
+void tambahBlok(Sesi& sesi, Blok& blok, const char* barisBaru) {
+    size_t tambahan = strlen(barisBaru);
+    if (tambahan >= kKarakterBlok) {
+        siramBlok(sesi, blok);
+        jawab(sesi, barisBaru);
         return;
     }
-    size_t gap = block.lines ? 1 : 0;
-    if (block.lines >= kBlockLines || block.len + gap + add > kBlockChars)
-        blockFlush(s, block);
-    if (block.lines)
-        block.text[block.len++] = '\n';
-    memcpy(block.text + block.len, line, add);
-    block.len += add;
-    block.text[block.len] = '\0';
-    block.lines++;
+    size_t jeda = blok.baris ? 1 : 0;
+    if (blok.baris >= kBarisBlok || blok.panjang + jeda + tambahan > kKarakterBlok)
+        siramBlok(sesi, blok);
+    if (blok.baris)
+        blok.teks[blok.panjang++] = '\n';
+    memcpy(blok.teks + blok.panjang, barisBaru, tambahan);
+    blok.panjang += tambahan;
+    blok.teks[blok.panjang] = '\0';
+    blok.baris++;
 }
 
-// The bubble height comes from a template label that the game switches to
-// ResizeHeight before every measurement, and NGUI stops adding lines at that
-// label's maxLineCount. Lifting the cap once lets a multi-line block count every
-// line, so the bubble grows with the text instead of clipping it.
-void prepareChatLines(void* chat) {
-    if (linesReady || !chat)
+// Tinggi bubble berasal dari label template yang diubah game ke ResizeHeight
+// sebelum setiap pengukuran, dan NGUI berhenti menambah baris pada maxLineCount
+// label itu. Menaikkan batasnya sekali membuat blok multi-baris menghitung
+// setiap baris, jadi bubble tumbuh mengikuti teks daripada memotongnya.
+void siapkanBarisChat(void* chat) {
+    if (barisSiap || !chat)
         return;
-    void* label = readPtr(readPtr(chat, chatUi), chatMeasure);
+    void* label = bacaPtr(bacaPtr(chat, fieldUiChat), fieldUkurChat);
     if (!label)
         return;
-    linesReady = true;
-    int32_t cap = readInt(label, labelMaxLines);
-    if (cap == 0)
+    barisSiap = true;
+    int32_t batas = bacaInt(label, fieldMaksBarisLabel);
+    if (batas == 0)
         return;
-    writeInt(label, labelMaxLines, 0);
-    LOGI("Chat line cap lifted: %d", cap);
+    tulisInt(label, fieldMaksBarisLabel, 0);
+    LOGI("Batas baris chat dinaikkan: %d", batas);
 }
 
-void* fieldText(void* chat) { return readPtr(readPtr(chat, chatInput), inputText); }
+void* teksInput(void* chat) {
+    return bacaPtr(bacaPtr(chat, fieldInputChat), fieldTeksInput);
+}
 
-bool openSession(void* chat, Session& s) {
-    void* manager = readPtr(chat, chatManager);
-    s.manager = manager;
-    s.chat = chat;
-    s.player = readPtr(manager, managerPlayer);
-    s.multi = readPtr(manager, managerMulti);
-    if (!s.player || !s.multi)
+bool bukaSesi(void* chat, Sesi& sesi) {
+    void* manajer = bacaPtr(chat, fieldManajerChat);
+    sesi.manajer = manajer;
+    sesi.chat = chat;
+    sesi.pemain = bacaPtr(manajer, fieldPemainManajer);
+    sesi.multi = bacaPtr(manajer, fieldMultiManajer);
+    if (!sesi.pemain || !sesi.multi)
         return false;
-    s.key = ownKey(s.player);
-    void* msg = readPtr(chat, chatMsg);
-    s.canReply = msg && msgSender.field && senderSelf.field && target(T_CHAT_MSG_ADD).addr;
-    s.senderId = s.canReply ? readInt(msg, senderSelf) : 0;
+    sesi.kunci = kunciSendiri(sesi.pemain);
+    void* pesan = bacaPtr(chat, fieldPesanChat);
+    sesi.bisaJawab = pesan && fieldPengirimPesan.field && fieldPengirimSendiri.field &&
+                     target(T_CHAT_MSG_ADD).addr;
+    sesi.idPengirim = sesi.bisaJawab ? bacaInt(pesan, fieldPengirimSendiri) : 0;
     return true;
 }
 
-// The stock kick button sends two packets: the kick makes the guest show the
-// notice, and the guest remove takes it off every list. Both carry the sender
-// key, so the same override makes a client accept them as host packets. A kick
-// needs only the target key and the pipe, so a queued key can be replayed later
-// without touching the guest object it came from.
-bool kickKey(void* multi, void* key) {
-    void* pipe = pipeOf(multi);
-    auto kick = reinterpret_cast<KickFn>(target(T_KICK_SEND).addr);
-    auto remove = reinterpret_cast<RemoveSendFn>(target(T_GUEST_REMOVE_SEND).addr);
-    if (!key || !pipe || !kick)
+// Tombol tendang bawaan mengirim dua paket: tendangan membuat tamu menampilkan
+// pemberitahuan, dan penghapusan tamu mengeluarkannya dari setiap daftar.
+// Keduanya membawa kunci pengirim, jadi penggantian yang sama membuat klien
+// menerimanya sebagai paket host. Tendangan hanya butuh kunci target dan pipe,
+// jadi kunci yang diantrekan bisa diputar ulang nanti tanpa menyentuh objek tamu
+// asalnya.
+bool tendangKunci(void* multi, void* kunci) {
+    void* pipe = pipeDari(multi);
+    auto tendang = reinterpret_cast<FnTendang>(target(T_KICK_SEND).addr);
+    auto hapus = reinterpret_cast<FnKirimHapus>(target(T_GUEST_REMOVE_SEND).addr);
+    if (!kunci || !pipe || !tendang)
         return false;
-    startSpoof(multi);
-    kick(pipe, key, target(T_KICK_SEND).method);
-    if (remove)
-        remove(pipe, key, target(T_GUEST_REMOVE_SEND).method);
-    stopSpoof();
+    mulaiSpoof(multi);
+    tendang(pipe, kunci, target(T_KICK_SEND).method);
+    if (hapus)
+        hapus(pipe, kunci, target(T_GUEST_REMOVE_SEND).method);
+    hentiSpoof();
     return true;
 }
 
-bool guestKeyText(void* guest, char* out) {
-    out[0] = '\0';
-    stringOf(readPtr(guest, guestKey), out, kKeyChars, "");
-    return out[0] != '\0';
+bool teksKunciTamu(void* tamu, char* keluaran) {
+    keluaran[0] = '\0';
+    teksDari(bacaPtr(tamu, fieldKunciTamu), keluaran, kKarakterKunci, "");
+    return keluaran[0] != '\0';
 }
 
-void finishKickAll() {
-    kickAll.active = false;
-    LOGI("Kickall done: %d guests", kickAll.sent);
-    if (kickAll.sent == 0)
+void selesaiTendangSemua() {
+    tendangSemua.aktif = false;
+    LOGI("Tendang semua selesai: %d tamu", tendangSemua.terkirim);
+    if (tendangSemua.terkirim == 0)
         return;
-    char line[kLineSize];
-    snprintf(line, sizeof(line), "Kickall: %d tamu ditendang", kickAll.sent);
-    toast(line);
+    char baris[kUkuranBaris];
+    snprintf(baris, sizeof(baris), "Kickall: %d tamu ditendang", tendangSemua.terkirim);
+    tampilkanToast(baris);
 }
 
-// The heartbeat runs while a room is open, which is what paces the drain. Only
-// the pipe and the manager are read here, and both come from objects the frame is
-// using right now, so a queue left over a room change can only fire at strangers.
-void kickAllTick(void* self) {
-    if (!kickAll.active)
+// Detak berjalan selama room terbuka, dan itulah yang mengatur laju pengurasan.
+// Hanya pipe dan manajer yang dibaca di sini, dan keduanya berasal dari objek
+// yang sedang dipakai frame ini, jadi antrean sisa pergantian room paling jauh
+// hanya menembak orang asing.
+void detakTendangSemua(void* sendiri) {
+    if (!tendangSemua.aktif)
         return;
-    double now = nowSeconds();
-    if (kickAll.nextIndex >= kickAll.count || now > kickAll.end) {
-        finishKickAll();
+    double sekarang = sekarangDetik();
+    if (tendangSemua.indeksBerikut >= tendangSemua.jumlah || sekarang > tendangSemua.akhir) {
+        selesaiTendangSemua();
         return;
     }
-    if (now < kickAll.next)
+    if (sekarang < tendangSemua.berikut)
         return;
-    void* multi = readPtr(readPtr(self, guestManagerA), managerMulti);
+    void* multi = bacaPtr(bacaPtr(sendiri, fieldManajerTamu), fieldMultiManajer);
     if (!multi) {
-        LOGI("Kickall stopped: room gone");
-        kickAll.active = false;
+        LOGI("Tendang semua dihentikan: room sudah tidak ada");
+        tendangSemua.aktif = false;
         return;
     }
-    kickAll.next = now + kKickGap;
-    LOGI("Kickall: %d of %d", kickAll.nextIndex + 1, kickAll.count);
-    void* key = utf16Of(kickAll.keys[kickAll.nextIndex]);
-    kickAll.nextIndex++;
-    if (kickKey(multi, key))
-        kickAll.sent++;
+    tendangSemua.berikut = sekarang + kJedaTendang;
+    LOGI("Tendang semua: %d dari %d", tendangSemua.indeksBerikut + 1, tendangSemua.jumlah);
+    void* kunci = utf16Dari(tendangSemua.kunci[tendangSemua.indeksBerikut]);
+    tendangSemua.indeksBerikut++;
+    if (tendangKunci(multi, kunci))
+        tendangSemua.terkirim++;
     else
-        LOGE("Kick failed: guest has no key or pipe");
+        LOGE("Tendang gagal: tamu tidak punya kunci atau pipe");
 }
 
-// The camera hook drops both stock entry points, so the local half of a shake
-// goes through the original of the two-argument call.
-void applyShake(void* camera, int32_t rounds, float offset) {
-    auto shakeFn = reinterpret_cast<ShakeFn>(target(T_SHAKE_NUM).orig);
-    if (shakeFn && camera)
-        shakeFn(camera, rounds, offset, target(T_SHAKE_NUM).method);
+// Hook kamera membuang kedua titik masuk bawaan, jadi separuh lokal dari sebuah
+// getaran berjalan lewat fungsi asli panggilan dua argumen.
+void terapkanGetar(void* kamera, int32_t putaran, float offset) {
+    auto fungsiGetar = reinterpret_cast<FnGetar>(target(T_SHAKE_NUM).orig);
+    if (fungsiGetar && kamera)
+        fungsiGetar(kamera, putaran, offset, target(T_SHAKE_NUM).method);
 }
 
-// One shake round at the game's top strength: the local camera is shaken here,
-// and the packet puts the other clients' cameras on the same spot.
-void shakeOnce(Session& s) {
-    void* camera = readPtr(s.manager, managerCamera);
-    applyShake(camera, kShakeRounds, kShakeOffset);
-    void* host = hostOf(s.multi);
-    auto send = reinterpret_cast<ShakeSendFn>(target(T_EXPLOSION_SHAKE_SEND).addr);
-    if (!host || !send)
+// Satu putaran getaran pada kekuatan terkuat game: kamera lokal digetarkan di
+// sini, dan paketnya menaruh kamera klien lain di titik yang sama.
+void getarSekali(Sesi& sesi) {
+    void* kamera = bacaPtr(sesi.manajer, fieldKameraManajer);
+    terapkanGetar(kamera, kPutaranGetar, kOffsetGetar);
+    void* host = hostDari(sesi.multi);
+    auto kirim = reinterpret_cast<FnKirimGetar>(target(T_EXPLOSION_SHAKE_SEND).addr);
+    if (!host || !kirim)
         return;
     float x = 0.0f;
     float y = 0.0f;
-    readPoint(readPtr(readPtr(s.player, playerPhy), physicsPos), posWorld, x, y);
-    startSpoof(s.multi);
-    send(host, x, y, target(T_EXPLOSION_SHAKE_SEND).method);
-    stopSpoof();
+    bacaTitik(bacaPtr(bacaPtr(sesi.pemain, fieldFisikPemain), fieldPosisiFisik), fieldPosisiDunia,
+              x, y);
+    mulaiSpoof(sesi.multi);
+    kirim(host, x, y, target(T_EXPLOSION_SHAKE_SEND).method);
+    hentiSpoof();
 }
 
-// The guest manager updates every frame while a room is open, which is the
-// heartbeat the timed shake needs; the chat panel can be closed mid-shake.
-void shakeTick(void* self) {
-    if (!shake.active)
+// Manajer tamu ter-update setiap frame selama room terbuka, dan itulah detak
+// yang dibutuhkan getaran berdurasi; panel chat bisa ditutup di tengah getaran.
+void detakGetar(void* sendiri) {
+    if (!getar.aktif)
         return;
-    double now = nowSeconds();
-    void* manager = readPtr(self, guestManagerA);
-    void* camera = readPtr(manager, managerCamera);
-    if (now >= shake.end) {
-        shake.active = false;
-        applyShake(camera, 0, 0.0f);
+    double sekarang = sekarangDetik();
+    void* manajer = bacaPtr(sendiri, fieldManajerTamu);
+    void* kamera = bacaPtr(manajer, fieldKameraManajer);
+    if (sekarang >= getar.akhir) {
+        getar.aktif = false;
+        terapkanGetar(kamera, 0, 0.0f);
         return;
     }
-    if (now < shake.next)
+    if (sekarang < getar.berikut)
         return;
-    shake.next = now + kShakeGap;
-    Session s = {};
-    s.manager = manager;
-    s.multi = readPtr(manager, managerMulti);
-    s.player = readPtr(manager, managerPlayer);
-    if (!s.multi || !s.player)
+    getar.berikut = sekarang + kJedaGetar;
+    Sesi sesi = {};
+    sesi.manajer = manajer;
+    sesi.multi = bacaPtr(manajer, fieldMultiManajer);
+    sesi.pemain = bacaPtr(manajer, fieldPemainManajer);
+    if (!sesi.multi || !sesi.pemain)
         return;
-    shakeOnce(s);
+    getarSekali(sesi);
 }
 
-void updateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_GUEST_UPDATE).orig);
-    if (orig)
-        orig(self, method);
-    // A game call that unwinds through a send would skip the matching stop, and a
-    // leaked override makes every later key lookup answer with the host key.
-    stopSpoof();
-    shakeTick(self);
-    kickAllTick(self);
+void hookUpdate(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_GUEST_UPDATE).orig);
+    if (asli)
+        asli(sendiri, metode);
+    // Panggilan game yang keluar lewat jalur kirim akan melewati henti yang
+    // berpasangan, dan penggantian yang bocor membuat setiap pencarian kunci
+    // berikutnya dijawab dengan kunci host.
+    hentiSpoof();
+    detakGetar(sendiri);
+    detakTendangSemua(sendiri);
 }
 
-int split(char* text, char** out, int max) {
+int pecahArgumen(char* teks, char** keluaran, int maks) {
     int n = 0;
-    char* p = text;
-    while (*p && n < max) {
+    char* p = teks;
+    while (*p && n < maks) {
         while (*p == ' ')
             p++;
         if (!*p)
             break;
-        out[n++] = p;
+        keluaran[n++] = p;
         while (*p && *p != ' ')
             p++;
         if (*p)
@@ -543,471 +563,482 @@ int split(char* text, char** out, int max) {
     return n;
 }
 
-// A command argument is player input, so a trailing character or an overflow
-// is rejected instead of silently becoming a different number.
-bool parseInt(const char* text, int& out) {
-    char* end = nullptr;
+// Argumen perintah adalah masukan pemain, jadi karakter sisa atau nilai yang
+// meluap ditolak daripada diam-diam menjadi angka lain.
+bool uraiInt(const char* teks, int& keluaran) {
+    char* akhir = nullptr;
     errno = 0;
-    long value = strtol(text, &end, 10);
-    if (errno != 0 || end == text || *end != '\0' || value < INT32_MIN || value > INT32_MAX)
+    long nilai = strtol(teks, &akhir, 10);
+    if (errno != 0 || akhir == teks || *akhir != '\0' || nilai < INT32_MIN || nilai > INT32_MAX)
         return false;
-    out = static_cast<int>(value);
+    keluaran = static_cast<int>(nilai);
     return true;
 }
 
-bool parseFloat(const char* text, float& out) {
-    char* end = nullptr;
+bool uraiFloat(const char* teks, float& keluaran) {
+    char* akhir = nullptr;
     errno = 0;
-    float value = strtof(text, &end);
-    if (errno != 0 || end == text || *end != '\0' || !std::isfinite(value))
+    float nilai = strtof(teks, &akhir);
+    if (errno != 0 || akhir == teks || *akhir != '\0' || !std::isfinite(nilai))
         return false;
-    out = value;
+    keluaran = nilai;
     return true;
 }
 
-using Handler = void (*)(Session&, int, char**);
+using FnPenangan = void (*)(Sesi&, int, char**);
 
-struct Command {
-    const char* name;
-    int minArgs;
-    int maxArgs;
-    int page;
-    Handler run;
-    const char* usage;
+struct Perintah {
+    const char* nama;
+    int minArgumen;
+    int maksArgumen;
+    int halaman;
+    FnPenangan jalankan;
+    const char* pemakaian;
 };
 
-void listCommand(Session&, int, char**);
-void kickCommand(Session&, int, char**);
-void kickAllCommand(Session&, int, char**);
-void closeCommand(Session&, int, char**);
-void shakeCommand(Session&, int, char**);
-void menuCommand(Session&, int, char**);
-void helpCommand(Session&, int, char**);
-void statusCommand(Session&, int, char**);
-void logCommand(Session&, int, char**);
+void perintahDaftar(Sesi&, int, char**);
+void perintahTendang(Sesi&, int, char**);
+void perintahTendangSemua(Sesi&, int, char**);
+void perintahTutup(Sesi&, int, char**);
+void perintahGetar(Sesi&, int, char**);
+void perintahMenu(Sesi&, int, char**);
+void perintahBantuan(Sesi&, int, char**);
+void perintahStatus(Sesi&, int, char**);
+void perintahLog(Sesi&, int, char**);
 
-const Command commands[] = {
-    {"list", 0, 0, 3, listCommand, "/list - daftar pemain dan nomornya"},
-    {"kick", 1, 1, 1, kickCommand, "/kick <n> - tendang pemain nomor n"},
-    {"kickall", 0, 0, 1, kickAllCommand, "/kickall - tendang semua tamu, host tetap"},
-    {"close", 0, 0, 1, closeCommand, "/close - tutup room lalu keluar"},
-    {"shake", 1, 1, 2, shakeCommand, "/shake <detik> - getarkan kamera paling kuat"},
-    {"menu", 0, 1, 3, menuCommand, "/menu [1-3] - daftar perintah"},
-    {"help", 0, 1, 3, helpCommand, "/help [perintah] - penjelasan perintah"},
-    {"status", 0, 0, 3, statusCommand, "/status - detail koneksi"},
-    {"log", 0, 0, 3, logCommand, "/log - lokasi file log sesi ini"},
+const Perintah daftarPerintah[] = {
+    {"list", 0, 0, 3, perintahDaftar, "/list - daftar pemain dan nomornya"},
+    {"kick", 1, 1, 1, perintahTendang, "/kick <n> - tendang pemain nomor n"},
+    {"kickall", 0, 0, 1, perintahTendangSemua, "/kickall - tendang semua tamu, host tetap"},
+    {"close", 0, 0, 1, perintahTutup, "/close - tutup room lalu keluar"},
+    {"shake", 1, 1, 2, perintahGetar, "/shake <detik> - getarkan kamera paling kuat"},
+    {"menu", 0, 1, 3, perintahMenu, "/menu [1-3] - daftar perintah"},
+    {"help", 0, 1, 3, perintahBantuan, "/help [perintah] - penjelasan perintah"},
+    {"status", 0, 0, 3, perintahStatus, "/status - detail koneksi"},
+    {"log", 0, 0, 3, perintahLog, "/log - lokasi file log sesi ini"},
 };
 
-constexpr int kCommandCount = sizeof(commands) / sizeof(commands[0]);
+constexpr int kJumlahPerintah = sizeof(daftarPerintah) / sizeof(daftarPerintah[0]);
 
-void listCommand(Session& s, int, char**) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    void* host = hostKeyOf(s.multi);
-    Block block;
-    blockReset(block);
-    char name[kNameSize];
-    char line[kLineSize];
-    for (int i = 0; i < n; i++) {
-        if (!slots[i].guest) {
-            snprintf(line, sizeof(line), "#%d kamu", i + 1);
+void perintahDaftar(Sesi& sesi, int, char**) {
+    Slot daftarSlot[kMaksPemain];
+    int jumlah = kumpulkanPemain(sesi.chat, sesi.kunci, daftarSlot);
+    void* host = kunciHostDari(sesi.multi);
+    Blok blok;
+    aturUlangBlok(blok);
+    char nama[kUkuranNama];
+    char baris[kUkuranBaris];
+    for (int i = 0; i < jumlah; i++) {
+        if (!daftarSlot[i].tamu) {
+            snprintf(baris, sizeof(baris), "#%d kamu", i + 1);
         } else {
-            stringOf(accountNameOf(slots[i].guest), name, sizeof(name), "?");
-            bool isHost = sameString(readPtr(slots[i].guest, guestKey), host);
-            snprintf(line, sizeof(line), "#%d %s%s", i + 1, name, isHost ? " (host)" : "");
+            teksDari(namaAkunDari(daftarSlot[i].tamu), nama, sizeof(nama), "?");
+            bool adalahHost = samaString(bacaPtr(daftarSlot[i].tamu, fieldKunciTamu), host);
+            snprintf(baris, sizeof(baris), "#%d %s%s", i + 1, nama, adalahHost ? " (host)" : "");
         }
-        blockAdd(s, block, line);
+        tambahBlok(sesi, blok, baris);
     }
-    blockFlush(s, block);
+    siramBlok(sesi, blok);
 }
 
-void kickCommand(Session& s, int, char** argv) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    int index = 0;
-    if (!parseInt(argv[0], index)) {
-        reply(s, "Nomor pemain harus angka");
+void perintahTendang(Sesi& sesi, int, char** argv) {
+    Slot daftarSlot[kMaksPemain];
+    int jumlah = kumpulkanPemain(sesi.chat, sesi.kunci, daftarSlot);
+    int indeks = 0;
+    if (!uraiInt(argv[0], indeks)) {
+        jawab(sesi, "Nomor pemain harus angka");
         return;
     }
-    if (index < 1 || index > n) {
-        reply(s, "Pemain nomor itu tidak ada");
+    if (indeks < 1 || indeks > jumlah) {
+        jawab(sesi, "Pemain nomor itu tidak ada");
         return;
     }
-    if (!slots[index - 1].guest) {
-        reply(s, "Tidak bisa menendang diri sendiri");
+    if (!daftarSlot[indeks - 1].tamu) {
+        jawab(sesi, "Tidak bisa menendang diri sendiri");
         return;
     }
-    if (sameString(readPtr(slots[index - 1].guest, guestKey), hostKeyOf(s.multi))) {
-        reply(s, "Host tidak bisa ditendang");
+    if (samaString(bacaPtr(daftarSlot[indeks - 1].tamu, fieldKunciTamu),
+                   kunciHostDari(sesi.multi))) {
+        jawab(sesi, "Host tidak bisa ditendang");
         return;
     }
-    if (!kickKey(s.multi, readPtr(slots[index - 1].guest, guestKey))) {
-        reply(s, "Tendangan gagal");
+    if (!tendangKunci(sesi.multi, bacaPtr(daftarSlot[indeks - 1].tamu, fieldKunciTamu))) {
+        jawab(sesi, "Tendangan gagal");
         return;
     }
-    reply(s, "Tendangan terkirim");
+    jawab(sesi, "Tendangan terkirim");
 }
 
-// The host is listed as an ordinary guest, and one frame cannot carry every
-// packet, so the command only fills the queue and the guest update sends one kick
-// per tick. The queue holds key text, never a guest or chat pointer, so it stays
-// valid while the room changes under it.
-void kickAllCommand(Session& s, int, char**) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    void* host = hostKeyOf(s.multi);
-    int count = 0;
-    for (int i = 1; i < n && count < kMaxPlayers; i++) {
-        char key[kKeyChars];
-        if (!guestKeyText(slots[i].guest, key))
+// Host terdaftar sebagai tamu biasa, dan satu frame tidak bisa membawa semua
+// paket, jadi perintah ini hanya mengisi antrean dan update tamu mengirim satu
+// tendangan per detak. Antrean hanya menyimpan teks kunci, tidak pernah pointer
+// tamu atau chat, jadi isinya tetap sah saat room berubah di bawahnya.
+void perintahTendangSemua(Sesi& sesi, int, char**) {
+    Slot daftarSlot[kMaksPemain];
+    int jumlah = kumpulkanPemain(sesi.chat, sesi.kunci, daftarSlot);
+    void* host = kunciHostDari(sesi.multi);
+    int terisi = 0;
+    for (int i = 1; i < jumlah && terisi < kMaksPemain; i++) {
+        char kunci[kKarakterKunci];
+        if (!teksKunciTamu(daftarSlot[i].tamu, kunci))
             continue;
-        if (sameString(readPtr(slots[i].guest, guestKey), host))
+        if (samaString(bacaPtr(daftarSlot[i].tamu, fieldKunciTamu), host))
             continue;
-        snprintf(kickAll.keys[count], kKeyChars, "%s", key);
-        LOGI("Kickall queue %d: %s", count + 1, key);
-        count++;
+        snprintf(tendangSemua.kunci[terisi], kKarakterKunci, "%s", kunci);
+        LOGI("Antrean tendang semua %d: %s", terisi + 1, kunci);
+        terisi++;
     }
-    LOGI("Kickall start: %d guests of %d slots", count, n);
-    if (count == 0) {
-        reply(s, "Tidak ada tamu untuk ditendang");
+    LOGI("Tendang semua mulai: %d tamu dari %d slot", terisi, jumlah);
+    if (terisi == 0) {
+        jawab(sesi, "Tidak ada tamu untuk ditendang");
         return;
     }
-    kickAll.active = true;
-    kickAll.next = 0.0;
-    kickAll.end = nowSeconds() + kKickWindow;
-    kickAll.sent = 0;
-    kickAll.nextIndex = 0;
-    kickAll.count = count;
-    reply(s, "Menendang tamu satu per satu");
+    tendangSemua.aktif = true;
+    tendangSemua.berikut = 0.0;
+    tendangSemua.akhir = sekarangDetik() + kJendelaTendang;
+    tendangSemua.terkirim = 0;
+    tendangSemua.indeksBerikut = 0;
+    tendangSemua.jumlah = terisi;
+    jawab(sesi, "Menendang tamu satu per satu");
 }
 
-// The stock host close sends the packet and then starts the same timed leave the
-// menu button uses, which is what actually empties the room and removes it from
-// the list. Only the host owns the room, so a guest is refused instead of being
-// dropped into the host leave flow.
-bool canLeaveRoom() {
-    return multiDisconnect.field && disconnectState.field && disconnectHost.field &&
-           target(T_DISCONNECT_INITIATIVE).addr;
+// Penutupan host bawaan mengirim paket lalu memulai proses keluar bertimer yang
+// sama dengan tombol menu, dan itulah yang benar-benar mengosongkan room serta
+// menghapusnya dari daftar. Hanya host pemilik room, jadi tamu ditolak daripada
+// dilempar ke alur keluar host.
+bool bisaKeluarRoom() {
+    return fieldDisconnectMulti.field && fieldStateDisconnect.field &&
+           fieldHostDisconnect.field && target(T_DISCONNECT_INITIATIVE).addr;
 }
 
-void startLeave(void* multi) {
-    auto leave = reinterpret_cast<LeaveFn>(target(T_DISCONNECT_INITIATIVE).addr);
-    void* state = readPtr(readPtr(multi, multiDisconnect), disconnectState);
-    if (!leave || !state) {
-        LOGE("Close: leave state missing");
+void mulaiKeluar(void* multi) {
+    auto keluar = reinterpret_cast<FnKeluar>(target(T_DISCONNECT_INITIATIVE).addr);
+    void* state = bacaPtr(bacaPtr(multi, fieldDisconnectMulti), fieldStateDisconnect);
+    if (!keluar || !state) {
+        LOGE("Tutup: state keluar tidak ada");
         return;
     }
-    leave(multi, readInt(state, disconnectHost), target(T_DISCONNECT_INITIATIVE).method);
+    keluar(multi, bacaInt(state, fieldHostDisconnect), target(T_DISCONNECT_INITIATIVE).method);
 }
 
-void closeCommand(Session& s, int, char**) {
-    if (!sameString(s.key, hostKeyOf(s.multi))) {
-        reply(s, "Hanya host yang bisa menutup room");
+void perintahTutup(Sesi& sesi, int, char**) {
+    if (!samaString(sesi.kunci, kunciHostDari(sesi.multi))) {
+        jawab(sesi, "Hanya host yang bisa menutup room");
         return;
     }
-    void* pipe = pipeOf(s.multi);
-    auto send = reinterpret_cast<EmptySendFn>(target(T_ROOM_CLOSE_SEND).addr);
-    bool canSend = pipe && send;
-    if (!canSend && !canLeaveRoom()) {
-        reply(s, "Tutup room tidak tersedia");
+    void* pipe = pipeDari(sesi.multi);
+    auto kirim = reinterpret_cast<FnKirimKosong>(target(T_ROOM_CLOSE_SEND).addr);
+    bool bisaKirim = pipe && kirim;
+    if (!bisaKirim && !bisaKeluarRoom()) {
+        jawab(sesi, "Tutup room tidak tersedia");
         return;
     }
-    reply(s, canSend ? "Room ditutup" : "Kamu keluar dari room");
-    if (canSend) {
-        startSpoof(s.multi);
-        send(pipe, target(T_ROOM_CLOSE_SEND).method);
-        stopSpoof();
+    jawab(sesi, bisaKirim ? "Room ditutup" : "Kamu keluar dari room");
+    if (bisaKirim) {
+        mulaiSpoof(sesi.multi);
+        kirim(pipe, target(T_ROOM_CLOSE_SEND).method);
+        hentiSpoof();
     }
-    if (canLeaveRoom())
-        startLeave(s.multi);
+    if (bisaKeluarRoom())
+        mulaiKeluar(sesi.multi);
 }
 
-// The seconds are capped so a typo cannot hammer every client with packets; the
-// timer itself is advanced by the guest update hook, never by a blocking loop.
-void shakeCommand(Session& s, int, char** argv) {
-    float seconds = 0.0f;
-    if (!parseFloat(argv[0], seconds)) {
-        reply(s, "Detik harus angka");
+// Detiknya dibatasi supaya salah ketik tidak menghantam setiap klien dengan
+// paket; timer-nya sendiri dimajukan hook update tamu, tidak pernah oleh loop
+// yang memblokir.
+void perintahGetar(Sesi& sesi, int, char** argv) {
+    float detik = 0.0f;
+    if (!uraiFloat(argv[0], detik)) {
+        jawab(sesi, "Detik harus angka");
         return;
     }
-    if (!(seconds > 0.0f)) {
-        reply(s, "Detik harus lebih dari nol");
+    if (!(detik > 0.0f)) {
+        jawab(sesi, "Detik harus lebih dari nol");
         return;
     }
-    if (seconds > kShakeMax)
-        seconds = kShakeMax;
-    shake.active = true;
-    shake.next = 0.0;
-    shake.end = nowSeconds() + seconds;
-    char line[kLineSize];
-    snprintf(line, sizeof(line), "Getar kamera paling kuat %.1f detik", seconds);
-    reply(s, line);
+    if (detik > kMaksGetar)
+        detik = kMaksGetar;
+    getar.aktif = true;
+    getar.berikut = 0.0;
+    getar.akhir = sekarangDetik() + detik;
+    char baris[kUkuranBaris];
+    snprintf(baris, sizeof(baris), "Getar kamera paling kuat %.1f detik", detik);
+    jawab(sesi, baris);
 }
 
-void statusCommand(Session& s, int, char**) {
-    void* hostKey = hostKeyOf(s.multi);
-    char own[kKeySize];
-    char host[kKeySize];
-    char line[kLineSize];
-    Block block;
-    blockReset(block);
-    stringOf(s.key, own, sizeof(own), "?");
-    stringOf(hostKey, host, sizeof(host), "?");
-    snprintf(line, sizeof(line), "Key kamu: %s", own);
-    blockAdd(s, block, line);
-    snprintf(line, sizeof(line), "Key host: %s", host);
-    blockAdd(s, block, line);
-    blockAdd(s, block, sameString(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
-    Slot slots[kMaxPlayers];
-    snprintf(line, sizeof(line), "Pemain: %d", collectPlayers(s.chat, s.key, slots));
-    blockAdd(s, block, line);
-    blockFlush(s, block);
+void perintahStatus(Sesi& sesi, int, char**) {
+    void* kunciHost = kunciHostDari(sesi.multi);
+    char milik[kUkuranKunci];
+    char host[kUkuranKunci];
+    char baris[kUkuranBaris];
+    Blok blok;
+    aturUlangBlok(blok);
+    teksDari(sesi.kunci, milik, sizeof(milik), "?");
+    teksDari(kunciHost, host, sizeof(host), "?");
+    snprintf(baris, sizeof(baris), "Kunci kamu: %s", milik);
+    tambahBlok(sesi, blok, baris);
+    snprintf(baris, sizeof(baris), "Kunci host: %s", host);
+    tambahBlok(sesi, blok, baris);
+    tambahBlok(sesi, blok,
+               samaString(sesi.kunci, kunciHost) ? "Kamu host: ya" : "Kamu host: tidak");
+    Slot daftarSlot[kMaksPemain];
+    snprintf(baris, sizeof(baris), "Pemain: %d",
+             kumpulkanPemain(sesi.chat, sesi.kunci, daftarSlot));
+    tambahBlok(sesi, blok, baris);
+    siramBlok(sesi, blok);
 }
 
-void logCommand(Session& s, int, char**) {
-    const char* path = logFilePath();
-    reply(s, path ? path : "File log belum dibuka");
+void perintahLog(Sesi& sesi, int, char**) {
+    const char* path = pathFileLog();
+    jawab(sesi, path ? path : "Berkas log belum dibuka");
 }
 
-void menuCommand(Session& s, int argc, char** argv) {
-    int from = 1;
-    int to = kPageCount;
+void perintahMenu(Sesi& sesi, int argc, char** argv) {
+    int dari = 1;
+    int sampai = kJumlahHalaman;
     if (argc > 0) {
-        int page = 0;
-        if (!parseInt(argv[0], page)) {
-            reply(s, "Halaman menu 1 sampai 3");
+        int halaman = 0;
+        if (!uraiInt(argv[0], halaman)) {
+            jawab(sesi, "Halaman menu 1 sampai 3");
             return;
         }
-        if (page < 1 || page > kPageCount) {
-            reply(s, "Halaman menu 1 sampai 3");
+        if (halaman < 1 || halaman > kJumlahHalaman) {
+            jawab(sesi, "Halaman menu 1 sampai 3");
             return;
         }
-        from = page;
-        to = page;
+        dari = halaman;
+        sampai = halaman;
     }
-    char header[kLineSize];
-    for (int page = from; page <= to; page++) {
-        Block block;
-        blockReset(block);
-        snprintf(header, sizeof(header), "KONTROL PENUH %d/%d", page, kPageCount);
-        blockAdd(s, block, header);
-        for (int i = 0; i < kCommandCount; i++) {
-            if (commands[i].page == page)
-                blockAdd(s, block, commands[i].usage);
+    char judul[kUkuranBaris];
+    for (int halaman = dari; halaman <= sampai; halaman++) {
+        Blok blok;
+        aturUlangBlok(blok);
+        snprintf(judul, sizeof(judul), "KONTROL PENUH %d/%d", halaman, kJumlahHalaman);
+        tambahBlok(sesi, blok, judul);
+        for (int i = 0; i < kJumlahPerintah; i++) {
+            if (daftarPerintah[i].halaman == halaman)
+                tambahBlok(sesi, blok, daftarPerintah[i].pemakaian);
         }
-        blockFlush(s, block);
+        siramBlok(sesi, blok);
     }
 }
 
-void helpCommand(Session& s, int argc, char** argv) {
+void perintahBantuan(Sesi& sesi, int argc, char** argv) {
     if (argc == 0) {
-        Block block;
-        blockReset(block);
-        for (int i = 0; i < kCommandCount; i++)
-            blockAdd(s, block, commands[i].usage);
-        blockFlush(s, block);
+        Blok blok;
+        aturUlangBlok(blok);
+        for (int i = 0; i < kJumlahPerintah; i++)
+            tambahBlok(sesi, blok, daftarPerintah[i].pemakaian);
+        siramBlok(sesi, blok);
         return;
     }
-    for (int i = 0; i < kCommandCount; i++) {
-        if (strcmp(commands[i].name, argv[0]))
+    for (int i = 0; i < kJumlahPerintah; i++) {
+        if (strcmp(daftarPerintah[i].nama, argv[0]))
             continue;
-        reply(s, commands[i].usage);
+        jawab(sesi, daftarPerintah[i].pemakaian);
         return;
     }
-    reply(s, "Perintah tidak dikenal");
+    jawab(sesi, "Perintah tidak dikenal");
 }
 
-// Only a known command is taken off the wire; anything else starting with a
-// slash is ordinary chat and reaches the room unchanged.
-bool runCommand(Session& s, int argc, char** argv) {
-    for (int i = 0; i < kCommandCount; i++) {
-        const Command& c = commands[i];
-        if (strcmp(c.name, argv[0]))
+// Hanya perintah yang dikenal yang diambil dari jaringan; apa pun selain itu
+// yang dimulai dengan garis miring adalah chat biasa dan sampai ke room tanpa
+// perubahan.
+bool jalankanPerintah(Sesi& sesi, int argc, char** argv) {
+    for (int i = 0; i < kJumlahPerintah; i++) {
+        const Perintah& perintah = daftarPerintah[i];
+        if (strcmp(perintah.nama, argv[0]))
             continue;
-        LOGI("Command: %s", c.name);
-        int count = argc - 1;
-        if (count < c.minArgs || count > c.maxArgs) {
-            reply(s, c.usage);
+        LOGI("Perintah: %s", perintah.nama);
+        int jumlah = argc - 1;
+        if (jumlah < perintah.minArgumen || jumlah > perintah.maksArgumen) {
+            jawab(sesi, perintah.pemakaian);
             return true;
         }
-        c.run(s, count, argv + 1);
+        perintah.jalankan(sesi, jumlah, argv + 1);
         return true;
     }
     return false;
 }
 
-// The line is copied without its leading slash, so the command table is matched
-// by name alone. Anything that is not plain printable ASCII stays ordinary chat.
-bool commandText(void* text, char* out, size_t size) {
-    const uint16_t* chars = stringChars(text);
-    int32_t len = stringLength(text);
-    if (!chars || len < 2 || chars[0] != '/')
+// Barisnya disalin tanpa garis miring di depan, jadi tabel perintah dicocokkan
+// berdasarkan nama saja. Apa pun yang bukan ASCII tercetak biasa tetap menjadi
+// chat biasa.
+bool teksPerintah(void* teks, char* keluaran, size_t ukuran) {
+    const uint16_t* karakter = karakterString(teks);
+    int32_t panjang = panjangString(teks);
+    if (!karakter || panjang < 2 || karakter[0] != '/')
         return false;
     size_t n = 0;
-    for (int32_t i = 1; i < len && n + 1 < size; i++) {
-        uint16_t code = chars[i];
-        if (code < 0x20 || code > 0x7E)
+    for (int32_t i = 1; i < panjang && n + 1 < ukuran; i++) {
+        uint16_t kode = karakter[i];
+        if (kode < 0x20 || kode > 0x7E)
             return false;
-        out[n++] = static_cast<char>(code >= 'A' && code <= 'Z' ? code + 32 : code);
+        keluaran[n++] = static_cast<char>(kode >= 'A' && kode <= 'Z' ? kode + 32 : kode);
     }
-    out[n] = '\0';
+    keluaran[n] = '\0';
     return true;
 }
 
-// A known command is answered locally and the box is cleared with the game's own
-// reset, so the typed line never reaches the network.
-bool handleCommand(void* chat, void* text) {
-    char line[kLineSize];
-    if (!ready || !commandText(text, line, sizeof(line)))
+// Perintah yang dikenal dijawab secara lokal dan kotaknya dibersihkan dengan
+// reset milik game, jadi baris yang diketik tidak pernah sampai ke jaringan.
+bool tanganiPerintah(void* chat, void* teks) {
+    char baris[kUkuranBaris];
+    if (!siap || !teksPerintah(teks, baris, sizeof(baris)))
         return false;
-    prepareChatLines(chat);
-    Session s;
-    if (!openSession(chat, s)) {
-        LOGE("Command session missing: no player or room");
+    siapkanBarisChat(chat);
+    Sesi sesi;
+    if (!bukaSesi(chat, sesi)) {
+        LOGE("Sesi perintah tidak ada: pemain atau room tidak ditemukan");
         return false;
     }
-    char* argv[kMaxTokens];
-    int argc = split(line, argv, kMaxTokens);
-    if (argc < 1 || !runCommand(s, argc, argv))
+    char* argv[kMaksToken];
+    int argc = pecahArgumen(baris, argv, kMaksToken);
+    if (argc < 1 || !jalankanPerintah(sesi, argc, argv))
         return false;
-    auto clear = reinterpret_cast<ClearFn>(target(T_CHAT_CLEAR).addr);
-    if (clear)
-        clear(chat, target(T_CHAT_CLEAR).method);
+    auto bersihkan = reinterpret_cast<FnBersihkan>(target(T_CHAT_CLEAR).addr);
+    if (bersihkan)
+        bersihkan(chat, target(T_CHAT_CLEAR).method);
     return true;
 }
 
-// The validator receives the same string the send uses, so a command is answered
-// here and the send is skipped by returning false.
-bool sendHook(void* self, void* text, bool voice, void* method) {
-    LOGI("Chat send: len=%d voice=%d", stringLength(text), voice ? 1 : 0);
-    if (handleCommand(self, text))
+// Validator menerima string yang sama dengan yang dipakai pengiriman, jadi
+// perintah dijawab di sini dan pengirimannya dilewati dengan mengembalikan
+// false.
+bool hookKirim(void* sendiri, void* teks, bool suara, void* metode) {
+    LOGI("Kirim chat: panjang=%d suara=%d", panjangString(teks), suara ? 1 : 0);
+    if (tanganiPerintah(sendiri, teks))
         return false;
-    auto orig = reinterpret_cast<ChatSendFn>(target(T_CHAT_SEND).orig);
-    return orig ? orig(self, text, voice, method) : false;
+    auto asli = reinterpret_cast<FnKirimChat>(target(T_CHAT_SEND).orig);
+    return asli ? asli(sendiri, teks, suara, metode) : false;
 }
 
-// The send button and the keyboard action both land here with the field already
-// filled, so the command is taken before the validator runs at all.
-void sendButtonHook(void* self, void* method) {
-    void* text = fieldText(self);
-    LOGI("Send button: len=%d", stringLength(text));
-    if (handleCommand(self, text))
+// Tombol kirim dan aksi keyboard sama-sama mendarat di sini dengan field yang
+// sudah terisi, jadi perintahnya diambil sebelum validator berjalan sama sekali.
+void hookTombolKirim(void* sendiri, void* metode) {
+    void* teks = teksInput(sendiri);
+    LOGI("Tombol kirim: panjang=%d", panjangString(teks));
+    if (tanganiPerintah(sendiri, teks))
         return;
-    auto orig = reinterpret_cast<SendInputFn>(target(T_INPUT_SEND).orig);
-    if (orig)
-        orig(self, method);
+    auto asli = reinterpret_cast<FnKirimInput>(target(T_INPUT_SEND).orig);
+    if (asli)
+        asli(sendiri, metode);
 }
 
-void* keyHook(void* self, void* method) {
-    if (spoofOn && spoofKey)
-        return spoofKey;
-    auto orig = reinterpret_cast<KeyFn>(target(T_PLAYER_KEY).orig);
-    return orig ? orig(self, method) : nullptr;
+void* hookKunci(void* sendiri, void* metode) {
+    if (spoofAktif && kunciSpoof)
+        return kunciSpoof;
+    auto asli = reinterpret_cast<FnKunci>(target(T_PLAYER_KEY).orig);
+    return asli ? asli(sendiri, metode) : nullptr;
 }
 
-// Resolves the fields of the bubble a reply lands in: the message list, the last
-// message and the label it owns. A missing field only leaves the prefab's line
-// cap in place, so the commands keep working.
-void resolveMsgLabel() {
-    if (!resolveField(classOf("Net__Multi__Chat"), "msgs", chatMsgs))
+// Mencari field bubble tempat jawaban mendarat: daftar pesan, pesan terakhir,
+// dan label miliknya. Field yang tidak ada hanya membiarkan batas baris prefab
+// apa adanya, jadi perintahnya tetap berjalan.
+void cariFieldLabelPesan() {
+    if (!cariField(kelasDari("Net__Multi__Chat"), "msgs", fieldDaftarPesan))
         return;
-    void* listClass = fieldClass(chatMsgs);
-    if (!resolveField(listClass, "_items", msgItems) || !resolveField(listClass, "_size", msgCount))
+    void* kelasDaftar = kelasField(fieldDaftarPesan);
+    if (!cariField(kelasDaftar, "_items", fieldItemPesan) ||
+        !cariField(kelasDaftar, "_size", fieldJumlahPesan))
         return;
-    void* msgClass = fieldElementClass(msgItems);
-    if (!msgClass || !resolveField(msgClass, "c", msgObj))
+    void* kelasPesan = kelasElemenField(fieldItemPesan);
+    if (!kelasPesan || !cariField(kelasPesan, "c", fieldObjekPesan))
         return;
-    if (!resolveField(fieldClass(msgObj), "content__Text__Standard__Text__Label", msgLabel))
+    if (!cariField(kelasField(fieldObjekPesan), "content__Text__Standard__Text__Label",
+                   fieldLabelPesan))
         return;
-    resolveField(fieldClass(msgLabel), "mMaxLineCount", labelMaxLines);
+    cariField(kelasField(fieldLabelPesan), "mMaxLineCount", fieldMaksBarisLabel);
 }
 
-bool resolveFields() {
-    if (!resolveField(classOf("Net__Multi__Chat"), "a", chatManager))
+bool cariFieldKontrol() {
+    if (!cariField(kelasDari("Net__Multi__Chat"), "a", fieldManajerChat))
         return false;
-    if (!resolveField(classOf("Net__Multi__Chat"), "_input_Field", chatInput) ||
-        !resolveField(fieldClass(chatInput), "text", inputText))
+    if (!cariField(kelasDari("Net__Multi__Chat"), "_input_Field", fieldInputChat) ||
+        !cariField(kelasField(fieldInputChat), "text", fieldTeksInput))
         return false;
-    void* managerClass = fieldClass(chatManager);
-    // The camera is only used for the local half of /shake, so a missing field
-    // must not turn the whole command set off.
-    resolveField(managerClass, "camera", managerCamera);
-    if (!resolveField(managerClass, "guests", managerGuests) ||
-        !resolveField(managerClass, "multi", managerMulti) ||
-        !resolveField(managerClass, "player", managerPlayer))
-        return false;
-
-    void* listClass = fieldClass(managerGuests);
-    if (!resolveField(listClass, "_items", guestsItems) ||
-        !resolveField(listClass, "_size", guestsSize))
+    void* kelasManajer = kelasField(fieldManajerChat);
+    // Kamera hanya dipakai untuk separuh lokal /shake, jadi field yang tidak ada
+    // tidak boleh mematikan seluruh rangkaian perintah.
+    cariField(kelasManajer, "camera", fieldKameraManajer);
+    if (!cariField(kelasManajer, "guests", fieldTamuManajer) ||
+        !cariField(kelasManajer, "multi", fieldMultiManajer) ||
+        !cariField(kelasManajer, "player", fieldPemainManajer))
         return false;
 
-    void* guestClass = fieldElementClass(guestsItems);
-    if (!resolveField(guestClass, "key", guestKey) ||
-        !resolveField(guestClass, "account", guestAccount))
-        return false;
-    if (!resolveField(fieldClass(guestAccount), "user_Name", accountName))
-        return false;
-    if (!resolveField(fieldClass(managerPlayer), "phy", playerPhy))
+    void* kelasDaftar = kelasField(fieldTamuManajer);
+    if (!cariField(kelasDaftar, "_items", fieldItemTamu) ||
+        !cariField(kelasDaftar, "_size", fieldUkuranTamu))
         return false;
 
-    if (!resolveField(fieldClass(playerPhy), "pos", physicsPos))
+    void* kelasTamu = kelasElemenField(fieldItemTamu);
+    if (!cariField(kelasTamu, "key", fieldKunciTamu) ||
+        !cariField(kelasTamu, "account", fieldAkunTamu))
         return false;
-    if (!resolveField(fieldClass(physicsPos), "world", posWorld))
+    if (!cariField(kelasField(fieldAkunTamu), "user_Name", fieldNamaAkun))
         return false;
-
-    if (!resolveField(fieldClass(managerMulti), "transfer", multiTransfer))
-        return false;
-    void* transferClass = fieldClass(multiTransfer);
-    if (!resolveField(transferClass, "pipe", transferPipe) ||
-        !resolveField(transferClass, "host", transferHost))
+    if (!cariField(kelasField(fieldPemainManajer), "phy", fieldFisikPemain))
         return false;
 
-    // The guest manager frame callback drives the timed shake, so its manager
-    // pointer is resolved the same way as every other field.
-    if (!resolveField(classOf("Guest__Manager"), "a", guestManagerA))
+    if (!cariField(kelasField(fieldFisikPemain), "pos", fieldPosisiFisik))
+        return false;
+    if (!cariField(kelasField(fieldPosisiFisik), "world", fieldPosisiDunia))
         return false;
 
-    // Replies and the local half of /close degrade on their own: a missing field
-    // sends the answer to a toast and skips the local leave, never the commands.
-    if (!resolveField(fieldClass(managerMulti), "_disconnect", multiDisconnect) ||
-        !resolveField(fieldClass(multiDisconnect), "_state", disconnectState) ||
-        !resolveField(fieldClass(disconnectState), "host", disconnectHost))
-        LOGE("Close fields missing; /close skips the leave");
-    if (resolveField(classOf("Net__Multi__Chat"), "_msg", chatMsg) &&
-        resolveField(fieldClass(chatMsg), "sender", msgSender)) {
-        resolveField(fieldClass(msgSender), "self", senderSelf);
-        resolveField(fieldClass(msgSender), "other", senderOther);
+    if (!cariField(kelasField(fieldMultiManajer), "transfer", fieldTransferMulti))
+        return false;
+    void* kelasTransfer = kelasField(fieldTransferMulti);
+    if (!cariField(kelasTransfer, "pipe", fieldPipeTransfer) ||
+        !cariField(kelasTransfer, "host", fieldHostTransfer))
+        return false;
+
+    // Callback frame manajer tamu menggerakkan getaran berdurasi, jadi pointer
+    // manajernya dicari dengan cara yang sama seperti field lainnya.
+    if (!cariField(kelasDari("Guest__Manager"), "a", fieldManajerTamu))
+        return false;
+
+    // Jawaban dan separuh lokal /close menurun sendiri: field yang tidak ada
+    // mengirim jawabannya ke toast dan melewati proses keluar lokal, bukan
+    // mematikan perintahnya.
+    if (!cariField(kelasField(fieldMultiManajer), "_disconnect", fieldDisconnectMulti) ||
+        !cariField(kelasField(fieldDisconnectMulti), "_state", fieldStateDisconnect) ||
+        !cariField(kelasField(fieldStateDisconnect), "host", fieldHostDisconnect))
+        LOGE("Field tutup tidak ditemukan; /close melewati proses keluar");
+    if (cariField(kelasDari("Net__Multi__Chat"), "_msg", fieldPesanChat) &&
+        cariField(kelasField(fieldPesanChat), "sender", fieldPengirimPesan)) {
+        cariField(kelasField(fieldPengirimPesan), "self", fieldPengirimSendiri);
+        cariField(kelasField(fieldPengirimPesan), "other", fieldPengirimLain);
     }
 
-    // The name the game prints for this player, used when an answer is added
-    // under the "other" sender id so it keeps the left layout.
-    if (resolveField(classOf("Net__Multi__Chat"), "_text", chatText))
-        resolveField(fieldClass(chatText), "me", textMe);
+    // Nama yang dicetak game untuk pemain ini, dipakai saat jawaban ditambahkan
+    // dengan id pengirim "other" supaya tata letak kirinya terjaga.
+    if (cariField(kelasDari("Net__Multi__Chat"), "_text", fieldTeksChat))
+        cariField(kelasField(fieldTeksChat), "me", fieldTeksSaya);
 
-    // The template label that measures every bubble, used to lift its line cap
-    // before the first multi-line answer. A missing field only leaves the cap.
-    if (resolveField(classOf("Net__Multi__Chat"), "ui", chatUi) &&
-        resolveField(classOf("UI__Manager"), "measure__Chat__Text__Label", chatMeasure))
-        resolveField(fieldClass(chatMeasure), "mMaxLineCount", labelMaxLines);
-    resolveMsgLabel();
+    // Label template yang mengukur setiap bubble, dipakai untuk menaikkan batas
+    // barisnya sebelum jawaban multi-baris pertama. Field yang tidak ada hanya
+    // membiarkan batasnya.
+    if (cariField(kelasDari("Net__Multi__Chat"), "ui", fieldUiChat) &&
+        cariField(kelasDari("UI__Manager"), "measure__Chat__Text__Label", fieldUkurChat))
+        cariField(kelasField(fieldUkurChat), "mMaxLineCount", fieldMaksBarisLabel);
+    cariFieldLabelPesan();
     return true;
 }
 
 } // namespace
 
-void installFullControlHooks() {
-    ready = resolveFields() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
-            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
-            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_SHAKE_SEND).addr &&
-            target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr;
-    if (!ready) {
-        LOGE("Full control fields missing; chat commands stay off");
+void pasangHookKontrolPenuh() {
+    siap = cariFieldKontrol() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
+           target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
+           target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_SHAKE_SEND).addr &&
+           target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr;
+    if (!siap) {
+        LOGE("Field kontrol penuh tidak ditemukan; perintah chat tidak aktif");
         return;
     }
-    LOGI("Full control fields OK");
-    installHook(target(T_CHAT_SEND), reinterpret_cast<void*>(sendHook));
-    installHook(target(T_INPUT_SEND), reinterpret_cast<void*>(sendButtonHook));
-    installHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(keyHook));
-    installHook(target(T_GUEST_UPDATE), reinterpret_cast<void*>(updateHook));
+    LOGI("Field kontrol penuh siap");
+    pasangHook(target(T_CHAT_SEND), reinterpret_cast<void*>(hookKirim));
+    pasangHook(target(T_INPUT_SEND), reinterpret_cast<void*>(hookTombolKirim));
+    pasangHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(hookKunci));
+    pasangHook(target(T_GUEST_UPDATE), reinterpret_cast<void*>(hookUpdate));
 }

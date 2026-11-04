@@ -9,39 +9,39 @@
 
 namespace {
 
-Field accountField = {};
-Field introduceField = {};
-Field lengthField = {};
+Field fieldAkun = {};
+Field fieldPerkenalan = {};
+Field fieldPanjang = {};
 
-// Introduce__Set truncates the text to _introduce.length before storing it.
-// Raising that limit keeps the whole text.
-void introduceHook(void* self, void* text, void* method) {
-    if (accountField.field && introduceField.field && lengthField.field) {
-        void* account = readPtr(self, accountField);
-        void* introduce = readPtr(account, introduceField);
-        if (introduce)
-            writeInt(introduce, lengthField, INT32_MAX);
+// Introduce__Set memotong teks sesuai _introduce.length sebelum menyimpannya.
+// Menaikkan batas itu membuat seluruh teks ikut tersimpan.
+void hookPerkenalan(void* self, void* text, void* method) {
+    if (fieldAkun.field && fieldPerkenalan.field && fieldPanjang.field) {
+        void* akun = bacaPtr(self, fieldAkun);
+        void* perkenalan = bacaPtr(akun, fieldPerkenalan);
+        if (perkenalan)
+            tulisInt(perkenalan, fieldPanjang, INT32_MAX);
     }
 
-    auto orig = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_INTRODUCE_SET).orig);
-    if (orig)
-        orig(self, text, method);
+    auto asli = reinterpret_cast<void (*)(void*, void*, void*)>(target(T_INTRODUCE_SET).orig);
+    if (asli)
+        asli(self, text, method);
 }
 
-bool resolveAccountFields() {
-    return resolveField(classOf("Net__Account__My_Account__Detail"), "account", accountField) &&
-           resolveField(fieldClass(accountField), "_introduce", introduceField) &&
-           resolveField(fieldClass(introduceField), "length", lengthField);
+bool cariFieldAkun() {
+    return cariField(kelasDari("Net__Account__My_Account__Detail"), "account", fieldAkun) &&
+           cariField(kelasField(fieldAkun), "_introduce", fieldPerkenalan) &&
+           cariField(kelasField(fieldPerkenalan), "length", fieldPanjang);
 }
 
 } // namespace
 
-void installAccountHooks() {
-    if (resolveAccountFields()) {
-        LOGI("Account fields OK");
+void pasangHookAkun() {
+    if (cariFieldAkun()) {
+        LOGI("Field akun OK");
     } else {
-        LOGE("Account fields not found; introduce stays capped");
+        LOGE("Field akun tidak ditemukan; perkenalan tetap terbatas");
     }
 
-    installHook(target(T_INTRODUCE_SET), reinterpret_cast<void*>(introduceHook));
+    pasangHook(target(T_INTRODUCE_SET), reinterpret_cast<void*>(hookPerkenalan));
 }

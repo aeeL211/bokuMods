@@ -9,160 +9,166 @@
 
 namespace {
 
-Field posM = {};
-Field mainPos = {};
-Field posStepsMax = {};
-Field posStepsHalf = {};
-Field posStepsW = {};
-Field posW = {};
-Field posValues = {};
-Field valueMin = {};
-Field valueMax = {};
-Field valuePerStep = {};
-Field portraitM = {};
-Field portraitPos = {};
+Field fieldMPos = {};
+Field fieldPosUtama = {};
+Field fieldLangkahMaks = {};
+Field fieldLangkahSetengah = {};
+Field fieldLebarLangkah = {};
+Field fieldLebarPos = {};
+Field fieldNilaiPos = {};
+Field fieldNilaiMin = {};
+Field fieldNilaiMaks = {};
+Field fieldNilaiPerLangkah = {};
+Field fieldMPotret = {};
+Field fieldPosPotret = {};
 
-constexpr int kMaxAxes = 8;
-constexpr int kRangeSlots = 2;
-int32_t skinBase[kRangeSlots][kMaxAxes] = {};
-int32_t skinWidened[kRangeSlots][kMaxAxes] = {};
+constexpr int kMaksSumbu = 8;
+constexpr int kSlotRentang = 2;
+int32_t skinDasar[kSlotRentang][kMaksSumbu] = {};
+int32_t skinDiperlebar[kSlotRentang][kMaksSumbu] = {};
 
-// Refresh__Step resets the X/Y sliders to -5..+5 and derives steps_Half,
-// steps_W and per_Step from steps_Max. Widen only the axes that are still at
-// -5..+5 (the rotate axis is left alone) and rebuild the derived values so
-// Value__To__Step sees the new -25..+25 range in the same Refresh() pass.
-void patchRange(void* self, const Field& ownerField, const Field& posField, int slot) {
-    if (!ownerField.field || !posField.field || !posStepsMax.field || !posStepsHalf.field ||
-        !posStepsW.field || !posW.field || !posValues.field || !valueMin.field || !valueMax.field ||
-        !valuePerStep.field) {
+// Refresh__Step mengatur ulang slider X/Y ke -5..+5 lalu menurunkan steps_Half,
+// steps_W, dan per_Step dari steps_Max. Hanya sumbu yang masih -5..+5 yang
+// dilebarkan (sumbu rotasi dibiarkan) dan nilai turunannya disusun ulang supaya
+// Value__To__Step melihat rentang -25..+25 yang baru pada lintasan Refresh() yang
+// sama.
+void perlebarRentang(void* self, const Field& fieldPemilik, const Field& fieldPos, int slot) {
+    if (!fieldPemilik.field || !fieldPos.field || !fieldLangkahMaks.field ||
+        !fieldLangkahSetengah.field || !fieldLebarLangkah.field || !fieldLebarPos.field ||
+        !fieldNilaiPos.field || !fieldNilaiMin.field || !fieldNilaiMaks.field ||
+        !fieldNilaiPerLangkah.field) {
         return;
     }
 
-    void* owner = readPtr(self, ownerField);
-    void* pos = readPtr(owner, posField);
+    void* pemilik = bacaPtr(self, fieldPemilik);
+    void* pos = bacaPtr(pemilik, fieldPos);
     if (!pos)
         return;
 
-    void* values = readPtr(pos, posValues);
-    void* stepsMax = readPtr(pos, posStepsMax);
-    void* stepsHalf = readPtr(pos, posStepsHalf);
-    void* stepsW = readPtr(pos, posStepsW);
-    if (!values || !stepsMax || !stepsHalf || !stepsW)
+    void* nilaiArr = bacaPtr(pos, fieldNilaiPos);
+    void* langkahMaks = bacaPtr(pos, fieldLangkahMaks);
+    void* langkahSetengah = bacaPtr(pos, fieldLangkahSetengah);
+    void* lebarLangkah = bacaPtr(pos, fieldLebarLangkah);
+    if (!nilaiArr || !langkahMaks || !langkahSetengah || !lebarLangkah)
         return;
 
-    int32_t valueCount = arrayLength(values);
-    int32_t maxCount = arrayLength(stepsMax);
-    int32_t halfCount = arrayLength(stepsHalf);
-    int32_t widthCount = arrayLength(stepsW);
-    int32_t count = valueCount < maxCount ? valueCount : maxCount;
-    if (count > kMaxAxes)
-        count = kMaxAxes;
-    if (count <= 0)
+    int32_t jumlahNilai = panjangArray(nilaiArr);
+    int32_t jumlahMaks = panjangArray(langkahMaks);
+    int32_t jumlahSetengah = panjangArray(langkahSetengah);
+    int32_t jumlahLebar = panjangArray(lebarLangkah);
+    int32_t jumlah = jumlahNilai < jumlahMaks ? jumlahNilai : jumlahMaks;
+    if (jumlah > kMaksSumbu)
+        jumlah = kMaksSumbu;
+    if (jumlah <= 0)
         return;
 
-    float width = readFloat(pos, posW);
+    float lebarPos = bacaFloat(pos, fieldLebarPos);
 
-    for (int32_t i = 0; i < count; i++) {
-        void* value = *reinterpret_cast<void**>(arrayData(values) + i * sizeof(void*));
-        if (!value)
+    for (int32_t i = 0; i < jumlah; i++) {
+        void* nilai = *reinterpret_cast<void**>(dataArray(nilaiArr) + i * sizeof(void*));
+        if (!nilai)
             continue;
 
-        float min = readFloat(value, valueMin);
-        float max = readFloat(value, valueMax);
-        if (!nearValue(min, -5.0f) || !nearValue(max, 5.0f))
+        float batasMin = bacaFloat(nilai, fieldNilaiMin);
+        float batasMaks = bacaFloat(nilai, fieldNilaiMaks);
+        if (!dekatNilai(batasMin, -5.0f) || !dekatNilai(batasMaks, 5.0f))
             continue;
 
-        int32_t* maxPtr = reinterpret_cast<int32_t*>(arrayData(stepsMax) + i * sizeof(int32_t));
-        int32_t current = *maxPtr;
-        if (current <= 0) {
-            LOGE("Skin range: axis %d has steps_Max=%d, skipped", i, current);
-            continue;
-        }
-        if (current > INT32_MAX / 5) {
-            LOGE("Skin range: axis %d has steps_Max=%d, skipped", i, current);
+        char* alamatMaks = dataArray(langkahMaks) + i * sizeof(int32_t);
+        int32_t* ptrMaks = reinterpret_cast<int32_t*>(alamatMaks);
+        int32_t sekarang = *ptrMaks;
+        if (sekarang <= 0) {
+            LOGE("Rentang skin: sumbu %d punya steps_Max=%d, dilewati", i, sekarang);
             continue;
         }
+        if (sekarang > INT32_MAX / 5) {
+            LOGE("Rentang skin: sumbu %d punya steps_Max=%d, dilewati", i, sekarang);
+            continue;
+        }
 
-        int32_t base;
-        int32_t widened;
-        if (skinBase[slot][i] != 0 && current == skinBase[slot][i]) {
-            base = skinBase[slot][i];
-            widened = skinWidened[slot][i];
-        } else if (skinWidened[slot][i] != 0 && current == skinWidened[slot][i]) {
-            base = skinBase[slot][i];
-            widened = skinWidened[slot][i];
+        int32_t dasar;
+        int32_t diperlebar;
+        if (skinDasar[slot][i] != 0 && sekarang == skinDasar[slot][i]) {
+            dasar = skinDasar[slot][i];
+            diperlebar = skinDiperlebar[slot][i];
+        } else if (skinDiperlebar[slot][i] != 0 && sekarang == skinDiperlebar[slot][i]) {
+            dasar = skinDasar[slot][i];
+            diperlebar = skinDiperlebar[slot][i];
         } else {
-            base = current;
-            widened = current * 5;
-            skinBase[slot][i] = base;
-            skinWidened[slot][i] = widened;
-            LOGI("Skin range: axis %d widened %d -> %d steps", i, base, widened);
+            dasar = sekarang;
+            diperlebar = sekarang * 5;
+            skinDasar[slot][i] = dasar;
+            skinDiperlebar[slot][i] = diperlebar;
+            LOGI("Rentang skin: sumbu %d dilebarkan %d -> %d langkah", i, dasar, diperlebar);
         }
 
-        *maxPtr = widened;
-        if (i < halfCount) {
-            *reinterpret_cast<int32_t*>(arrayData(stepsHalf) + i * sizeof(int32_t)) = widened / 2;
+        *ptrMaks = diperlebar;
+        if (i < jumlahSetengah) {
+            char* alamatSetengah = dataArray(langkahSetengah) + i * sizeof(int32_t);
+            *reinterpret_cast<int32_t*>(alamatSetengah) = diperlebar / 2;
         }
-        if (i < widthCount && width > 0.0f) {
-            *reinterpret_cast<float*>(arrayData(stepsW) + i * sizeof(float)) =
-                width / static_cast<float>(widened);
+        if (i < jumlahLebar && lebarPos > 0.0f) {
+            char* alamatLebar = dataArray(lebarLangkah) + i * sizeof(float);
+            *reinterpret_cast<float*>(alamatLebar) = lebarPos / static_cast<float>(diperlebar);
         }
 
-        writeFloat(value, valueMin, -25.0f);
-        writeFloat(value, valueMax, 25.0f);
-        writeFloat(value, valuePerStep, 10.0f / static_cast<float>(base));
+        tulisFloat(nilai, fieldNilaiMin, -25.0f);
+        tulisFloat(nilai, fieldNilaiMaks, 25.0f);
+        tulisFloat(nilai, fieldNilaiPerLangkah, 10.0f / static_cast<float>(dasar));
     }
 }
 
-void posStepHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_POS_REFRESH_STEP).orig);
-    if (!orig)
+void hookLangkahPos(void* self, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_POS_REFRESH_STEP).orig);
+    if (!asli)
         return;
-    orig(self, method);
-    patchRange(self, posM, mainPos, 0);
+    asli(self, method);
+    perlebarRentang(self, fieldMPos, fieldPosUtama, 0);
 }
 
-// The portrait editor has its own _Pos instance and step arrays, so it gets a
-// second memo slot instead of overwriting the model editor's.
-void portraitStepHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_PORTRAIT_REFRESH_STEP).orig);
-    if (!orig)
+// Editor potret punya instance _Pos dan array langkah sendiri, jadi ia memakai
+// slot memo kedua alih-alih menimpa milik editor model.
+void hookLangkahPotret(void* self, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_PORTRAIT_REFRESH_STEP).orig);
+    if (!asli)
         return;
-    orig(self, method);
-    patchRange(self, portraitM, portraitPos, 1);
+    asli(self, method);
+    perlebarRentang(self, fieldMPotret, fieldPosPotret, 1);
 }
 
-bool resolvePos(void* posClass) {
-    return resolveField(posClass, "steps_Max", posStepsMax) &&
-           resolveField(posClass, "steps_Half", posStepsHalf) &&
-           resolveField(posClass, "steps_W", posStepsW) && resolveField(posClass, "w", posW) &&
-           resolveField(posClass, "values", posValues) &&
-           resolveField(fieldElementClass(posValues), "min", valueMin) &&
-           resolveField(fieldElementClass(posValues), "max", valueMax) &&
-           resolveField(fieldElementClass(posValues), "per_Step", valuePerStep);
+bool cariFieldPos(void* kelasPos) {
+    return cariField(kelasPos, "steps_Max", fieldLangkahMaks) &&
+           cariField(kelasPos, "steps_Half", fieldLangkahSetengah) &&
+           cariField(kelasPos, "steps_W", fieldLebarLangkah) &&
+           cariField(kelasPos, "w", fieldLebarPos) &&
+           cariField(kelasPos, "values", fieldNilaiPos) &&
+           cariField(kelasElemenField(fieldNilaiPos), "min", fieldNilaiMin) &&
+           cariField(kelasElemenField(fieldNilaiPos), "max", fieldNilaiMaks) &&
+           cariField(kelasElemenField(fieldNilaiPos), "per_Step", fieldNilaiPerLangkah);
 }
 
 } // namespace
 
-void installSkinRangeHooks() {
-    void* posComponent = classOf("UI__Menu__Model__Main__Pos");
-    bool modelRange =
-        resolveField(posComponent, "m", posM) && resolveField(fieldClass(posM), "_pos", mainPos);
+void pasangHookRentangSkin() {
+    void* komponenPos = kelasDari("UI__Menu__Model__Main__Pos");
+    bool rentangModel = cariField(komponenPos, "m", fieldMPos) &&
+                        cariField(kelasField(fieldMPos), "_pos", fieldPosUtama);
 
-    void* portraitComponent = classOf("Net__Account__Portrait__Main__Pos");
-    bool portraitRange = resolveField(portraitComponent, "m", portraitM) &&
-                         resolveField(fieldClass(portraitM), "_pos", portraitPos);
+    void* komponenPotret = kelasDari("Net__Account__Portrait__Main__Pos");
+    bool rentangPotret = cariField(komponenPotret, "m", fieldMPotret) &&
+                         cariField(kelasField(fieldMPotret), "_pos", fieldPosPotret);
 
-    bool posFields = resolvePos(modelRange ? fieldClass(mainPos) : fieldClass(portraitPos));
-    if (modelRange && posFields) {
-        LOGI("Skin range fields OK");
+    bool fieldPosAda =
+        cariFieldPos(rentangModel ? kelasField(fieldPosUtama) : kelasField(fieldPosPotret));
+    if (rentangModel && fieldPosAda) {
+        LOGI("Field rentang skin OK");
     } else {
-        LOGE("Skin range fields not found; X/Y stays -5..5");
+        LOGE("Field rentang skin tidak ditemukan; X/Y tetap -5..5");
     }
-    if (!portraitRange || !posFields) {
-        LOGE("Portrait range fields not found; portrait X/Y stays -5..5");
+    if (!rentangPotret || !fieldPosAda) {
+        LOGE("Field rentang potret tidak ditemukan; X/Y potret tetap -5..5");
     }
 
-    installHook(target(T_POS_REFRESH_STEP), reinterpret_cast<void*>(posStepHook));
-    installHook(target(T_PORTRAIT_REFRESH_STEP), reinterpret_cast<void*>(portraitStepHook));
+    pasangHook(target(T_POS_REFRESH_STEP), reinterpret_cast<void*>(hookLangkahPos));
+    pasangHook(target(T_PORTRAIT_REFRESH_STEP), reinterpret_cast<void*>(hookLangkahPotret));
 }

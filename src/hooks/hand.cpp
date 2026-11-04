@@ -8,70 +8,71 @@
 
 namespace {
 
-// Hh__Change writes the new held id into the player model and rebuilds the hand
-// sprite. A feature that keeps its item raises the flag around the stock call
-// that would clear the hand, so that change becomes a no-op.
-thread_local bool keepingHand = false;
-// Last id the game put into the hand, kept so an eat end can put the same item
-// back after its animation hid the sprite.
-void* handOwner = nullptr;
-int32_t handId = 0;
-// An eat end asks for the hand back, but a rebuild while the eat state is still
-// current builds the hidden eating pose. The rebuild waits for the end of that
-// player's update, when the state machine has moved past the eat animation.
-bool refreshPending = false;
-int refreshLogsLeft = 12;
+// Hh__Change menulis id pegang yang baru ke model pemain dan membangun ulang
+// sprite tangan. Fitur yang menahan itemnya menaikkan flag ini di sekitar
+// panggilan bawaan yang akan mengosongkan tangan, jadi perubahan itu menjadi
+// tanpa efek.
+thread_local bool menahanTangan = false;
+// Id terakhir yang dimasukkan game ke tangan, disimpan supaya akhir makan bisa
+// mengembalikan item yang sama setelah animasinya menyembunyikan sprite.
+void* pemilikTangan = nullptr;
+int32_t idTangan = 0;
+// Akhir makan meminta tangan kembali, tapi pembangunan ulang saat state makan
+// masih aktif membangun pose makan yang tersembunyi. Pembangunan ulang menunggu
+// akhir update pemain itu, saat state machine sudah melewati animasi makan.
+bool segarkanTertunda = false;
+int sisaLogSegarkan = 12;
 
-void rebuildHand(void* self) {
+void bangunUlangTangan(void* sendiri) {
     auto hh = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_HH_CHANGE).orig);
     if (!hh)
         return;
-    hh(self, handId, target(T_HH_CHANGE).method);
-    if (refreshLogsLeft > 0) {
-        refreshLogsLeft--;
-        LOGI("Hand refreshed: id=%d", handId);
+    hh(sendiri, idTangan, target(T_HH_CHANGE).method);
+    if (sisaLogSegarkan > 0) {
+        sisaLogSegarkan--;
+        LOGI("Tangan disegarkan: id=%d", idTangan);
     }
 }
 
-void hhChangeHook(void* self, int32_t id, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_HH_CHANGE).orig);
-    if (!orig)
+void hookGantiHh(void* sendiri, int32_t id, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_HH_CHANGE).orig);
+    if (!asli)
         return;
-    if (keepingHand)
+    if (menahanTangan)
         return;
-    orig(self, id, method);
-    handOwner = self;
-    handId = id;
+    asli(sendiri, id, metode);
+    pemilikTangan = sendiri;
+    idTangan = id;
 }
 
-void updateHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_PLAYER_UPDATE).orig);
-    if (!orig)
+void hookUpdate(void* sendiri, void* metode) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_PLAYER_UPDATE).orig);
+    if (!asli)
         return;
-    orig(self, method);
-    if (!refreshPending || self != handOwner)
+    asli(sendiri, metode);
+    if (!segarkanTertunda || sendiri != pemilikTangan)
         return;
-    refreshPending = false;
-    rebuildHand(self);
+    segarkanTertunda = false;
+    bangunUlangTangan(sendiri);
 }
 
 } // namespace
 
-void setKeepHand(bool keep) { keepingHand = keep; }
+void setelTahanTangan(bool tahan) { menahanTangan = tahan; }
 
-void refreshHand() {
-    if (!handOwner)
+void segarkanTangan() {
+    if (!pemilikTangan)
         return;
-    // Without the update hook there is no safe place to rebuild later, so fall
-    // back to the moment the eat end returns.
+    // Tanpa hook update tidak ada tempat aman untuk membangun ulang nanti, jadi
+    // kembali ke saat akhir makan selesai.
     if (!target(T_PLAYER_UPDATE).orig) {
-        rebuildHand(handOwner);
+        bangunUlangTangan(pemilikTangan);
         return;
     }
-    refreshPending = true;
+    segarkanTertunda = true;
 }
 
-void installHandHooks() {
-    installHook(target(T_HH_CHANGE), reinterpret_cast<void*>(hhChangeHook));
-    installHook(target(T_PLAYER_UPDATE), reinterpret_cast<void*>(updateHook));
+void pasangHookTangan() {
+    pasangHook(target(T_HH_CHANGE), reinterpret_cast<void*>(hookGantiHh));
+    pasangHook(target(T_PLAYER_UPDATE), reinterpret_cast<void*>(hookUpdate));
 }

@@ -2,14 +2,15 @@
 
 #include "targets.h"
 
-// Thin ShadowHook wrapper. Every hook goes through here so a failure is logged
-// in one place and the caller can leave that feature on vanilla behavior.
-bool initShadowHook();
-bool installHook(Target& t, void* replacement);
+// Pembungkus tipis ShadowHook. Setiap hook lewat sini supaya kegagalan tercatat
+// di satu tempat dan pemanggil bisa membiarkan fitur itu pada perilaku vanilla.
+bool inisialisasiShadowHook();
+bool pasangHook(Target& entri, void* pengganti);
 
-// Hooks a bare address instead of a target entry. The crash probes use it for
-// libc functions, which no target names, and it stays out of the hook count.
-bool installProbeHook(void* addr, void* replacement, void** original, const char* name);
+// Memasang hook pada alamat mentah, bukan pada entri target. Probe crash memakainya
+// untuk fungsi libc yang tidak dinamai target mana pun, dan tidak ikut dihitung
+// sebagai hook.
+bool pasangHookProbe(void* alamat, void* pengganti, void** asli, const char* nama);
 
-// Number of hooks that are currently installed.
-int installedHooks();
+// Jumlah hook yang saat ini terpasang.
+int jumlahHookTerpasang();

@@ -1,5 +1,7 @@
 #include "hooks.h"
 
+#include <cstdint>
+
 #include "hook.h"
 #include "il2cpp_api.h"
 #include "log.h"
@@ -7,111 +9,113 @@
 
 namespace {
 
-Field detailField = {};
-Field passwordField = {};
-Field strField = {};
-Field roomDataField = {};
-Field roomPasswordField = {};
+Field fieldDetail = {};
+Field fieldSandi = {};
+Field fieldStr = {};
+Field fieldDataRoom = {};
+Field fieldSandiRoom = {};
 
-// A room password is a few characters. Anything past this is a stale object
-// whose header was reused, not a real string, and passing it to the keyboard
-// makes Unity scan past the end of the heap.
-constexpr int32_t kMaxPasswordLen = 4096;
+// Sandi room hanya beberapa karakter. Yang lebih panjang dari ini adalah objek
+// basi yang header-nya dipakai ulang, bukan string sungguhan, dan meneruskannya
+// ke keyboard membuat Unity memindai melewati ujung heap.
+constexpr int32_t kBatasSandi = 4096;
 
-bool usableString(void* str) {
+bool stringLayak(void* str) {
     if (!str)
         return false;
-    int32_t len = stringLength(str);
-    return len >= 0 && len <= kMaxPasswordLen;
+    int32_t panjang = panjangString(str);
+    return panjang >= 0 && panjang <= kBatasSandi;
 }
 
-void* emptyString() { return newUtf16String(reinterpret_cast<const uint16_t*>(u""), 0); }
+void* stringKosong() { return stringUtf16Baru(reinterpret_cast<const uint16_t*>(u""), 0); }
 
-// The room data owns the room password, so reading it on demand keeps every
-// user of the value on the same live object.
-void* roomPassword(void* self) {
-    void* detail = readPtr(self, detailField);
-    void* roomData = readPtr(detail, roomDataField);
-    return readPtr(roomData, roomPasswordField);
+// Data room memiliki sandi room, jadi membacanya saat dibutuhkan menjaga setiap
+// pemakai nilai itu pada objek hidup yang sama.
+void* sandiRoom(void* self) {
+    void* detail = bacaPtr(self, fieldDetail);
+    void* dataRoom = bacaPtr(detail, fieldDataRoom);
+    return bacaPtr(dataRoom, fieldSandiRoom);
 }
 
-// Term__Bottom_Button() is the enabled state of the OK button: it reports
-// whether _password.str differs from the empty string. Input__Ok() returns
-// immediately when it is false, and the button itself is dimmed, so an empty
-// box could never submit and the compare was never reached. The button is
-// always usable with this hook; the room password is still checked by the
-// original code, which okHook satisfies just before the compare.
-bool buttonHook(void*, void*) { return true; }
+// Term__Bottom_Button() adalah status aktif tombol OK: fungsi itu melaporkan
+// apakah _password.str berbeda dari string kosong. Input__Ok() langsung kembali
+// bila hasilnya false, dan tombolnya sendiri diredupkan, sehingga kotak kosong
+// tidak pernah bisa dikirim dan perbandingannya tidak pernah tercapai. Dengan
+// hook ini tombolnya selalu bisa dipakai; sandi room tetap diperiksa kode asli,
+// yang dipenuhi okHook tepat sebelum perbandingan.
+bool hookTombol(void*, void*) { return true; }
 
-// Input__Ok compares _password.str with detail._room_Data.password and only then
-// closes the keyboard and calls Join__Start. The box stays empty, so the room's
-// own string object is put in place for that compare: String.Equals returns true
-// on the same reference before it reads a character, and the room data keeps the
-// object alive.
-void okHook(void* self, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_PASSWORD_OK).orig);
-    if (!orig)
+// Input__Ok membandingkan _password.str dengan detail._room_Data.password dan
+// baru setelah itu menutup keyboard serta memanggil Join__Start. Kotak tetap
+// kosong, jadi objek string milik room itu sendiri dipasang untuk perbandingan:
+// String.Equals mengembalikan true pada referensi yang sama sebelum membaca satu
+// karakter pun, dan data room menjaga objeknya tetap hidup.
+void hookOk(void* self, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_PASSWORD_OK).orig);
+    if (!asli)
         return;
-    void* value = readPtr(self, passwordField);
-    void* password = roomPassword(self);
-    if (value && usableString(password)) {
-        setRef(value, strField, password);
-        // The compare reads this field after the original runs, so a write that
-        // did not land is the one failure the next log must make obvious.
-        void* stored = readPtr(value, strField);
-        if (stored == password)
-            LOGI("Password: room password set, len=%d", stringLength(password));
+    void* nilai = bacaPtr(self, fieldSandi);
+    void* sandi = sandiRoom(self);
+    if (nilai && stringLayak(sandi)) {
+        setelRef(nilai, fieldStr, sandi);
+        // Perbandingan membaca field ini setelah fungsi asli berjalan, jadi
+        // penulisan yang tidak mendarat adalah satu-satunya kegagalan yang harus
+        // terlihat jelas di log berikutnya.
+        void* tersimpan = bacaPtr(nilai, fieldStr);
+        if (tersimpan == sandi)
+            LOGI("Sandi: sandi room terpasang, panjang=%d", panjangString(sandi));
         else
-            LOGE("Password: room password write lost, stored=%p want=%p", stored, password);
+            LOGE("Sandi: sandi room gagal ditulis, ada=%p seharusnya=%p", tersimpan, sandi);
     } else {
-        LOGE("Password: room password missing, compare runs as-is");
+        LOGE("Sandi: sandi room tidak ada, perbandingan berjalan apa adanya");
     }
-    // Reaching this line means the compare failed: the passing path tail-calls
-    // Join__Start and never comes back.
-    orig(self, method);
-    LOGI("Password: gate compare failed, ok returned");
+    // Mencapai baris ini berarti perbandingannya gagal: jalur yang lolos
+    // memanggil Join__Start sebagai tail call dan tidak pernah kembali.
+    asli(self, method);
+    LOGI("Sandi: perbandingan gerbang gagal, hookOk kembali");
 }
 
-// The keyboard path forwards _password.str as its initial text, so a null there
-// aborts before the field opens. _Start normally writes an empty string; after a
-// join the panel can still hold a recycled one instead. The room password is put
-// back for that case, because it is owned by the room data and stays alive while
-// the keyboard reads it, while a fresh allocation can be collected too early.
-void fieldHook(void* self, bool touch, void* method) {
-    auto orig = reinterpret_cast<void (*)(void*, bool, void*)>(target(T_PASSWORD_FIELD).orig);
-    if (!orig)
+// Jalur keyboard meneruskan _password.str sebagai teks awal, jadi null di sana
+// membatalkan sebelum field terbuka. _Start biasanya menulis string kosong;
+// setelah join, panel bisa masih memegang string yang dipakai ulang. Sandi room
+// dipasang kembali untuk kasus itu, karena objeknya dimiliki data room dan tetap
+// hidup selama keyboard membacanya, sedangkan alokasi baru bisa dikumpulkan
+// terlalu cepat.
+void hookField(void* self, bool touch, void* method) {
+    auto asli = reinterpret_cast<void (*)(void*, bool, void*)>(target(T_PASSWORD_FIELD).orig);
+    if (!asli)
         return;
-    void* value = readPtr(self, passwordField);
-    void* str = value ? readPtr(value, strField) : nullptr;
-    // The panel hands this string to the keyboard, so log it before the original
-    // runs: a stale pointer here is what the engine then chokes on.
-    LOGI("Password field: value=%p str=%p len=%d", value, str, stringLength(str));
-    if (value && !usableString(str)) {
-        void* password = roomPassword(self);
-        void* seed = usableString(password) ? password : emptyString();
-        if (seed)
-            setRef(value, strField, seed);
+    void* nilai = bacaPtr(self, fieldSandi);
+    void* str = nilai ? bacaPtr(nilai, fieldStr) : nullptr;
+    // Panel menyerahkan string ini ke keyboard, jadi catat sebelum fungsi asli
+    // berjalan: pointer basi di sini yang kemudian membuat engine tersedak.
+    LOGI("Field sandi: nilai=%p str=%p panjang=%d", nilai, str, panjangString(str));
+    if (nilai && !stringLayak(str)) {
+        void* sandi = sandiRoom(self);
+        void* awal = stringLayak(sandi) ? sandi : stringKosong();
+        if (awal)
+            setelRef(nilai, fieldStr, awal);
     }
-    orig(self, touch, method);
+    asli(self, touch, method);
 }
 
 } // namespace
 
-void installPasswordHooks() {
-    void* password = classOf("UI__Menu__Net__Multi__Join__Room_List__Detail__Password");
-    if (password && resolveField(password, "detail", detailField) &&
-        resolveField(password, "_password", passwordField) &&
-        resolveField(fieldClass(passwordField), "str", strField) &&
-        resolveField(fieldClass(detailField), "_room_Data", roomDataField) &&
-        resolveField(fieldClass(roomDataField), "password", roomPasswordField)) {
-        LOGI("Password room fields OK");
-        LOGI("Password offsets: _password=%zu str=%zu room_Data=%zu room_password=%zu",
-             passwordField.offset, strField.offset, roomDataField.offset, roomPasswordField.offset);
+void pasangHookSandi() {
+    void* kelasSandi = kelasDari("UI__Menu__Net__Multi__Join__Room_List__Detail__Password");
+    if (kelasSandi && cariField(kelasSandi, "detail", fieldDetail) &&
+        cariField(kelasSandi, "_password", fieldSandi) &&
+        cariField(kelasField(fieldSandi), "str", fieldStr) &&
+        cariField(kelasField(fieldDetail), "_room_Data", fieldDataRoom) &&
+        cariField(kelasField(fieldDataRoom), "password", fieldSandiRoom)) {
+        LOGI("Field sandi room OK");
+        LOGI("Offset sandi: _password=%zu str=%zu room_Data=%zu room_password=%zu",
+             fieldSandi.offset, fieldStr.offset, fieldDataRoom.offset, fieldSandiRoom.offset);
     } else {
-        LOGE("Password room fields not found; password rooms stay manual");
+        LOGE("Field sandi room tidak ditemukan; room bersandi tetap manual");
     }
 
-    installHook(target(T_PASSWORD_OK), reinterpret_cast<void*>(okHook));
-    installHook(target(T_PASSWORD_FIELD), reinterpret_cast<void*>(fieldHook));
-    installHook(target(T_PASSWORD_BUTTON), reinterpret_cast<void*>(buttonHook));
+    pasangHook(target(T_PASSWORD_OK), reinterpret_cast<void*>(hookOk));
+    pasangHook(target(T_PASSWORD_FIELD), reinterpret_cast<void*>(hookField));
+    pasangHook(target(T_PASSWORD_BUTTON), reinterpret_cast<void*>(hookTombol));
 }

@@ -7,20 +7,20 @@
 
 namespace {
 
-// Camera shake is purely visual, so both entry points are dropped.
-void shakeHook(void*, void*) {}
-void shakeNumHook(void*, int32_t, float, void*) {}
+// Getar kamera murni visual, jadi kedua titik masuknya dibuang.
+void hookGetar(void*, void*) {}
+void hookGetarAngka(void*, int32_t, float, void*) {}
 
-// Tile debris is spawned on break. Dropping the spawn leaves the tile and the
-// record untouched while the fragments stay gone.
-void debrisHook(void*, int32_t, void*) {}
-void debrisTileHook(void*, float, float, int32_t, void*, void*) {}
+// Puing tile dimunculkan saat tile pecah. Membuang pemunculannya membiarkan tile
+// dan rekamannya utuh sementara serpihannya tidak ada.
+void hookPuing(void*, int32_t, void*) {}
+void hookPuingTile(void*, float, float, int32_t, void*, void*) {}
 
 } // namespace
 
-void installEffectHooks() {
-    installHook(target(T_SHAKE), reinterpret_cast<void*>(shakeHook));
-    installHook(target(T_SHAKE_NUM), reinterpret_cast<void*>(shakeNumHook));
-    installHook(target(T_DEBRIS), reinterpret_cast<void*>(debrisHook));
-    installHook(target(T_DEBRIS_TILE), reinterpret_cast<void*>(debrisTileHook));
+void pasangHookEfek() {
+    pasangHook(target(T_SHAKE), reinterpret_cast<void*>(hookGetar));
+    pasangHook(target(T_SHAKE_NUM), reinterpret_cast<void*>(hookGetarAngka));
+    pasangHook(target(T_DEBRIS), reinterpret_cast<void*>(hookPuing));
+    pasangHook(target(T_DEBRIS_TILE), reinterpret_cast<void*>(hookPuingTile));
 }
