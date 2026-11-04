@@ -31,10 +31,28 @@ struct Panel {
     Field idTendang;
 };
 
-Panel panelConsole = {"Net__Multi__Guest__Main__Console", T_KICK_CONSOLE_INIT, T_KICK_CONSOLE_ICON,
-                      T_KICK_CONSOLE_TEXT,          T_KICK_CONSOLE_YES,  {}, {}, {}, {}, {}, {}};
-Panel panelMenu = {"Net__Multi__Guest__Menu", T_KICK_MENU_INIT, T_KICK_MENU_ICON, T_KICK_MENU_TEXT,
-                   T_KICK_MENU_YES,          {}, {}, {}, {}, {}, {}};
+Panel panelConsole = {"Net__Multi__Guest__Main__Console",
+                      T_KICK_CONSOLE_INIT,
+                      T_KICK_CONSOLE_ICON,
+                      T_KICK_CONSOLE_TEXT,
+                      T_KICK_CONSOLE_YES,
+                      {},
+                      {},
+                      {},
+                      {},
+                      {},
+                      {}};
+Panel panelMenu = {"Net__Multi__Guest__Menu",
+                   T_KICK_MENU_INIT,
+                   T_KICK_MENU_ICON,
+                   T_KICK_MENU_TEXT,
+                   T_KICK_MENU_YES,
+                   {},
+                   {},
+                   {},
+                   {},
+                   {},
+                   {}};
 
 Field fieldNet = {};
 Field fieldState = {};

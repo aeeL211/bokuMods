@@ -430,8 +430,8 @@ void pasangHookRoomKit() {
     // sudah terpasang sebelum RoomKit memakai hasilnya sebagai kunci pengirim.
     siap = cariFieldRoomKit() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).orig && target(T_KICK_SEND).addr &&
-           target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr &&
-           target(T_CHAT_MSG_ADD).addr && target(T_GUEST_REMOVE_SEND).addr;
+           target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr && target(T_CHAT_MSG_ADD).addr &&
+           target(T_GUEST_REMOVE_SEND).addr;
     if (!siap) {
         LOGE("Field RoomKit tidak ditemukan; perintah chat tidak aktif");
         return;
