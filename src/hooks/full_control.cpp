@@ -34,6 +34,8 @@ constexpr size_t kNameSize = 48;
 constexpr size_t kKeySize = 16;
 constexpr double kShakeGap = 0.2;
 constexpr float kShakeMax = 90.0f;
+constexpr double kKickGap = 0.25;
+constexpr size_t kKeyChars = 40;
 
 // The stock explosion shake is the strongest the game configures: eight rounds
 // at the full camera offset. The camera hooks drop every stock call, so the
@@ -77,6 +79,22 @@ struct Shake {
 };
 
 Shake shake = {};
+
+// The kick packets are drained one guest per tick. The transfer helper has its
+// own update step, and a whole list sent in a single frame loses every packet
+// after the first, which is what left the players behind the host in the room.
+struct KickAll {
+    bool active;
+    double next;
+    int sent;
+    int pass;
+    void* multi;
+    void* chat;
+    char done[kMaxPlayers][kKeyChars];
+    int doneCount;
+};
+
+KickAll kickAll = {};
 
 // A host-only packet passes the receiver because the payload carries the key of
 // the sender, and the receiver only compares that string. The override lives on
@@ -259,6 +277,97 @@ bool kickSlot(Session& s, const Slot& slot) {
     return true;
 }
 
+bool guestKeyText(void* guest, char* out) {
+    out[0] = '\0';
+    stringOf(readPtr(guest, guestKey), out, kKeyChars, "");
+    return out[0] != '\0';
+}
+
+bool alreadyKicked(const char* key) {
+    for (int i = 0; i < kickAll.doneCount; i++) {
+        if (!strcmp(kickAll.done[i], key))
+            return true;
+    }
+    return false;
+}
+
+void rememberKicked(const char* key) {
+    if (kickAll.doneCount >= kMaxPlayers)
+        return;
+    snprintf(kickAll.done[kickAll.doneCount], kKeyChars, "%s", key);
+    kickAll.doneCount++;
+}
+
+// A guest is a target only while it still has a key, is not the host, and was not
+// kicked by an earlier tick. The list is read again every tick, so a guest who
+// already left cannot leave a stale pointer behind.
+bool nextKickTarget(Session& s, Slot& out) {
+    Slot slots[kMaxPlayers];
+    int n = collectPlayers(kickAll.chat, s.key, slots);
+    void* host = hostKeyOf(s.multi);
+    for (int i = 1; i < n; i++) {
+        char key[kKeyChars];
+        if (!guestKeyText(slots[i].guest, key))
+            continue;
+        if (sameText(readPtr(slots[i].guest, guestKey), host))
+            continue;
+        if (alreadyKicked(key))
+            continue;
+        out = slots[i];
+        rememberKicked(key);
+        return true;
+    }
+    return false;
+}
+
+void finishKickAll(Session& s) {
+    kickAll.active = false;
+    char line[kLineSize];
+    if (kickAll.sent == 0) {
+        reply(s, "Tidak ada tamu untuk ditendang");
+        return;
+    }
+    snprintf(line, sizeof(line), "Selesai: %d tamu ditendang", kickAll.sent);
+    reply(s, line);
+}
+
+// The heartbeat runs while a room is open, which is what paces the drain. One
+// quiet pass is retried once, so a dropped packet still ends with an empty room.
+void kickAllTick(void* self) {
+    if (!kickAll.active)
+        return;
+    void* manager = readPtr(self, guestManagerA);
+    if (readPtr(manager, managerMulti) != kickAll.multi) {
+        kickAll.active = false;
+        return;
+    }
+    double now = nowSeconds();
+    if (now < kickAll.next)
+        return;
+    kickAll.next = now + kKickGap;
+    Session s;
+    if (!openSession(kickAll.chat, s)) {
+        LOGI("Kickall stopped: chat missing");
+        kickAll.active = false;
+        return;
+    }
+    Slot target = {};
+    if (nextKickTarget(s, target)) {
+        if (kickSlot(s, target))
+            kickAll.sent++;
+        else
+            LOGE("Kick failed: guest has no key or pipe");
+        return;
+    }
+    if (kickAll.pass == 0) {
+        kickAll.pass = 1;
+        kickAll.doneCount = 0;
+        kickAll.next = now + kKickGap * 4;
+        return;
+    }
+    finishKickAll(s);
+}
+
 // The camera hook drops both stock entry points, so the local half of a shake
 // goes through the original of the two-argument call.
 void applyShake(void* camera, int32_t rounds, float offset) {
@@ -314,6 +423,7 @@ void updateHook(void* self, void* method) {
     if (orig)
         orig(self, method);
     shakeTick(self);
+    kickAllTick(self);
 }
 
 int split(char* text, char** out, int max) {
@@ -409,31 +519,35 @@ void kickCommand(Session& s, int, char** argv) {
     reply(s, "Tendangan terkirim");
 }
 
-// The host is listed as an ordinary guest, and kicking it ends the room before
-// the rest of the list is reached, so that slot is skipped and every other
-// guest is kicked, leaving this player and the host alone.
+// The host is listed as an ordinary guest, and the packets cannot all leave in one
+// frame, so the command only arms the drain and the guest update kicks one guest
+// per tick. The log names every slot, so a room that keeps somebody says why.
 void kickAllCommand(Session& s, int, char**) {
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
     void* host = hostKeyOf(s.multi);
-    int sent = 0;
+    int guests = 0;
     for (int i = 1; i < n; i++) {
-        if (sameText(readPtr(slots[i].guest, guestKey), host)) {
-            LOGI("Kick skipped: host");
-            continue;
-        }
-        if (kickSlot(s, slots[i]))
-            sent++;
-        else
-            LOGE("Kick skipped: guest has no key or pipe");
+        char key[kKeyChars];
+        bool hasKey = guestKeyText(slots[i].guest, key);
+        bool isHost = sameText(readPtr(slots[i].guest, guestKey), host);
+        LOGI("Kickall slot %d: %s%s", i + 1, hasKey ? key : "no key", isHost ? " host" : "");
+        if (hasKey && !isHost)
+            guests++;
     }
-    char line[kLineSize];
-    if (sent == 0) {
-        reply(s, "Tidak ada pemain untuk ditendang");
+    LOGI("Kickall start: %d guests of %d slots", guests, n);
+    if (guests == 0) {
+        reply(s, "Tidak ada tamu untuk ditendang");
         return;
     }
-    snprintf(line, sizeof(line), "Tendangan terkirim ke %d pemain", sent);
-    reply(s, line);
+    kickAll.active = true;
+    kickAll.next = 0.0;
+    kickAll.sent = 0;
+    kickAll.pass = 0;
+    kickAll.doneCount = 0;
+    kickAll.multi = s.multi;
+    kickAll.chat = s.chat;
+    reply(s, "Menendang tamu satu per satu");
 }
 
 // The stock host close sends the packet and then starts the same timed leave the
