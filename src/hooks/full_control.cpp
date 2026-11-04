@@ -20,13 +20,11 @@ using FnKirimChat = bool (*)(void*, void*, bool, void*);
 using FnKirimInput = void (*)(void*, void*);
 using FnKunci = void* (*)(void*, void*);
 using FnTendang = void (*)(void*, void*, void*);
-using FnKirimKosong = void (*)(void*, void*);
 using FnBersihkan = void (*)(void*, void*);
 using FnKirimGetar = void (*)(void*, float, float, void*);
 using FnGetar = void (*)(void*, int32_t, float, void*);
 using FnTambahTeks = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
 using FnKirimHapus = void (*)(void*, void*, void*);
-using FnKeluar = void (*)(void*, int32_t, void*);
 
 constexpr int kMaksPemain = 16;
 constexpr int kMaksToken = 8;
@@ -76,9 +74,6 @@ Field fieldFisikPemain = {};
 Field fieldTransferMulti = {};
 Field fieldPipeTransfer = {};
 Field fieldHostTransfer = {};
-Field fieldDisconnectMulti = {};
-Field fieldStateDisconnect = {};
-Field fieldHostDisconnect = {};
 Field fieldPosisiFisik = {};
 Field fieldPosisiDunia = {};
 Field fieldManajerTamu = {};
@@ -595,7 +590,6 @@ struct Perintah {
 void perintahDaftar(Sesi&, int, char**);
 void perintahTendang(Sesi&, int, char**);
 void perintahTendangSemua(Sesi&, int, char**);
-void perintahTutup(Sesi&, int, char**);
 void perintahGetar(Sesi&, int, char**);
 void perintahMenu(Sesi&, int, char**);
 void perintahBantuan(Sesi&, int, char**);
@@ -606,7 +600,6 @@ const Perintah daftarPerintah[] = {
     {"list", 0, 0, 3, perintahDaftar, "/list - daftar pemain dan nomornya"},
     {"kick", 1, 1, 1, perintahTendang, "/kick <n> - tendang pemain nomor n"},
     {"kickall", 0, 0, 1, perintahTendangSemua, "/kickall - tendang semua tamu, host tetap"},
-    {"close", 0, 0, 1, perintahTutup, "/close - tutup room lalu keluar"},
     {"shake", 1, 1, 2, perintahGetar, "/shake <detik> - getarkan kamera paling kuat"},
     {"menu", 0, 1, 3, perintahMenu, "/menu [1-3] - daftar perintah"},
     {"help", 0, 1, 3, perintahBantuan, "/help [perintah] - penjelasan perintah"},
@@ -696,47 +689,6 @@ void perintahTendangSemua(Sesi& sesi, int, char**) {
     tendangSemua.indeksBerikut = 0;
     tendangSemua.jumlah = terisi;
     jawab(sesi, "Menendang tamu satu per satu");
-}
-
-// Penutupan host bawaan mengirim paket lalu memulai proses keluar bertimer yang
-// sama dengan tombol menu, dan itulah yang benar-benar mengosongkan room serta
-// menghapusnya dari daftar. Hanya host pemilik room, jadi tamu ditolak daripada
-// dilempar ke alur keluar host.
-bool bisaKeluarRoom() {
-    return fieldDisconnectMulti.field && fieldStateDisconnect.field && fieldHostDisconnect.field &&
-           target(T_DISCONNECT_INITIATIVE).addr;
-}
-
-void mulaiKeluar(void* multi) {
-    auto keluar = reinterpret_cast<FnKeluar>(target(T_DISCONNECT_INITIATIVE).addr);
-    void* state = bacaPtr(bacaPtr(multi, fieldDisconnectMulti), fieldStateDisconnect);
-    if (!keluar || !state) {
-        LOGE("Tutup: state keluar tidak ada");
-        return;
-    }
-    keluar(multi, bacaInt(state, fieldHostDisconnect), target(T_DISCONNECT_INITIATIVE).method);
-}
-
-void perintahTutup(Sesi& sesi, int, char**) {
-    if (!samaString(sesi.kunci, kunciHostDari(sesi.multi))) {
-        jawab(sesi, "Hanya host yang bisa menutup room");
-        return;
-    }
-    void* pipe = pipeDari(sesi.multi);
-    auto kirim = reinterpret_cast<FnKirimKosong>(target(T_ROOM_CLOSE_SEND).addr);
-    bool bisaKirim = pipe && kirim;
-    if (!bisaKirim && !bisaKeluarRoom()) {
-        jawab(sesi, "Tutup room tidak tersedia");
-        return;
-    }
-    jawab(sesi, bisaKirim ? "Room ditutup" : "Kamu keluar dari room");
-    if (bisaKirim) {
-        mulaiSpoof(sesi.multi);
-        kirim(pipe, target(T_ROOM_CLOSE_SEND).method);
-        hentiSpoof();
-    }
-    if (bisaKeluarRoom())
-        mulaiKeluar(sesi.multi);
 }
 
 // Detiknya dibatasi supaya salah ketik tidak menghantam setiap klien dengan
@@ -993,13 +945,8 @@ bool cariFieldKontrol() {
     if (!cariField(kelasDari("Guest__Manager"), "a", fieldManajerTamu))
         return false;
 
-    // Jawaban dan separuh lokal /close menurun sendiri: field yang tidak ada
-    // mengirim jawabannya ke toast dan melewati proses keluar lokal, bukan
-    // mematikan perintahnya.
-    if (!cariField(kelasField(fieldMultiManajer), "_disconnect", fieldDisconnectMulti) ||
-        !cariField(kelasField(fieldDisconnectMulti), "_state", fieldStateDisconnect) ||
-        !cariField(kelasField(fieldStateDisconnect), "host", fieldHostDisconnect))
-        LOGE("Field tutup tidak ditemukan; /close melewati proses keluar");
+    // Jawaban menurun sendiri: field yang tidak ada mengirim jawabannya ke
+    // toast, bukan mematikan seluruh perintah.
     if (cariField(kelasDari("Net__Multi__Chat"), "_msg", fieldPesanChat) &&
         cariField(kelasField(fieldPesanChat), "sender", fieldPengirimPesan)) {
         cariField(kelasField(fieldPengirimPesan), "self", fieldPengirimSendiri);
@@ -1026,8 +973,8 @@ bool cariFieldKontrol() {
 void pasangHookKontrolPenuh() {
     siap = cariFieldKontrol() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
-           target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_SHAKE_SEND).addr &&
-           target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr;
+           target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr &&
+           target(T_GUEST_UPDATE).addr;
     if (!siap) {
         LOGE("Field kontrol penuh tidak ditemukan; perintah chat tidak aktif");
         return;

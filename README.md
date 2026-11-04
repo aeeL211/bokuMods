@@ -59,7 +59,7 @@ Hanya `arm64-v8a`. Tidak ada komponen Java, Xposed, atau LSPosed.
 
 - Label versi di layar judul, halaman About, dan bantuan multiplayer diberi akhiran
   `(modded)`.
-- Perintah chat tingkat host: kick, tutup room, dan getar kamera.
+- Perintah chat tingkat host: kick dan getar kamera.
 
 ## Perintah chat
 
@@ -82,7 +82,6 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room; host tidak bisa ditendang |
 | `/kickall` | 1 | keluarkan semua tamu, host dan diri sendiri tetap di room |
-| `/close` | 1 | tutup room lalu keluar; hanya host, tanpa konfirmasi |
 | `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
 | `/status` | 3 | kunci sendiri, kunci host, status host, jumlah pemain |
 | `/log` | 3 | lokasi berkas log sesi ini |
@@ -94,17 +93,13 @@ utilitas di halaman 3, sedangkan `/menu 2` hanya halaman itu. `/help` tanpa argu
 semua baris bantuan, dan `/help kick` hanya baris perintah itu.
 
 `/shake <detik>` memakai kekuatan getar terbesar yang game pakai saat ledakan, diulang tiap
-0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick, tutup
-room, dan getaran dikirim memakai kunci host room, jadi klien lain menerimanya sebagai perintah
-dari host; pemain lain ikut bergetar kalau kameranya dekat dengan posisi pemain yang mengetik
-perintah. `/close` hanya untuk host: paket tutup room dikirim ke semua tamu, lalu perangkat host
-menjalankan alur keluar yang sama dengan tombol tutup room bawaan game, jadi room benar-benar
-kosong dan hilang dari daftar. Tamu yang mengetik `/close` dijawab `Hanya host yang bisa menutup
-room` dan tidak ada paket yang dikirim. Perintah lain hanya berlaku di room yang sedang
-dimasuki, dan tamu tetap bisa memakai `/kick`, `/kickall`, dan `/shake`. `/kick` yang menyasar
-nomor host dijawab `Host tidak bisa ditendang`. `/kickall` menjawab `Menendang tamu satu per
-satu`, lalu menendang satu tamu tiap 0,25 detik, karena beberapa paket dalam satu frame hanya
-yang pertama yang sampai.
+0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick dan getaran
+dikirim memakai kunci host room, jadi klien lain menerimanya sebagai perintah dari host; pemain
+lain ikut bergetar kalau kameranya dekat dengan posisi pemain yang mengetik perintah. Perintah
+hanya berlaku di room yang sedang dimasuki, dan tamu tetap bisa memakai `/kick`, `/kickall`, dan
+`/shake`. `/kick` yang menyasar nomor host dijawab `Host tidak bisa ditendang`. `/kickall`
+menjawab `Menendang tamu satu per satu`, lalu menendang satu tamu tiap 0,25 detik, karena
+beberapa paket dalam satu frame hanya yang pertama yang sampai.
 
 Argumen `/kick`, `/menu`, dan `/shake` harus angka. Teks yang tidak terbaca sebagai angka
 ditolak dengan jawaban di chat, jadi salah ketik tidak menjadi nomor atau durasi lain.
@@ -141,8 +136,8 @@ itu yang dipakai untuk mencari penyebab, bukan logcat.
   atau library saat game berjalan, jadi sesi yang sudah aktif tidak bisa kehilangan hook di
   tengah permainan.
 - Izin build dan destroy tetap ditentukan host room, jadi tamu tidak bisa mengubah tile di luar
-  izin itu. Yang dikirim mod hanya paket kick, tutup room, dan getaran lewat perintah chat,
-  memakai kunci host room sebagai pengirim.
+  izin itu. Yang dikirim mod hanya paket kick dan getaran lewat perintah chat, memakai kunci host
+  room sebagai pengirim.
 - Sushi, es krim, dan popsicle tetap habis seperti biasa, karena pose akhir makanannya mematikan
   layer tangan sehingga sisa item akan tidak terlihat. Makanan yang dimakan langsung dari piring
   tetap habis dalam satu gigitan seperti vanila.

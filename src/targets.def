@@ -57,7 +57,6 @@ T_INTRODUCE_SET|Net__Account__My_Account__Detail|Introduce__Set|1|
 T_GUEST_MSG_RECEIVE|Net__Multi__Guest__Chat|Msg__Receive__Text|3|
 T_CHAT_MSG_RECEIVE|Net__Multi__Chat|Msg__Receive__Text|2|
 T_CHAT_MSG_ADD|Net__Multi__Chat|Msg__Add__Text|6|
-T_DISCONNECT_INITIATIVE|Net__Multi|Disconnect__Initiative|1|
 T_GUEST_REMOVE_SEND|Net__Multi__Transfer__Pipe|Host__Client__Guest__Remove__Send|1|
 T_PLAYER_KEY|Player__Manager|Key|0|
 T_SENSITIVE_WORD|UI__Note|Term__Sensitive_Word|3|
@@ -87,7 +86,6 @@ T_CHAT_SEND|Net__Multi__Chat|Term__Send_|2|
 T_CHAT_CLEAR|Net__Multi__Chat|Input_Field__Clear|0|
 T_INPUT_SEND|Net__Multi__Chat|Input__Send|0|
 T_KICK_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Kick__Send|1|
-T_ROOM_CLOSE_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Room_Close__Send|0|
 T_GUEST_UPDATE|Guest__Manager|_Update|0|
 T_EXPLOSION_SHAKE_SEND|Net__Multi__Transfer__Host|Explosion__Camera_Shake__Send|1|
 T_HOST_KEY|Net__Multi|Host__Key|0|
