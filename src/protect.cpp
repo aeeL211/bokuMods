@@ -48,12 +48,27 @@ bool integrityOk() {
         eh->e_ident[EI_DATA] != ELFDATA2LSB || eh->e_machine != EM_AARCH64)
         return false;
 
+    // The header itself is always in the first page, so a program header table
+    // beyond it points at memory this process never mapped. A malformed or
+    // truncated library must fail closed instead of walking off the image.
+    constexpr Elf64_Off kMaxPhdrOffset = 4096;
+    constexpr Elf64_Half kMaxPhnum = 128;
+    if (eh->e_phoff == 0 || eh->e_phoff > kMaxPhdrOffset || eh->e_phnum == 0 ||
+        eh->e_phnum > kMaxPhnum || eh->e_phentsize != sizeof(Elf64_Phdr))
+        return false;
+    if (eh->e_phoff + static_cast<Elf64_Off>(eh->e_phnum) * sizeof(Elf64_Phdr) > kMaxPhdrOffset)
+        return false;
+
     const auto* ph =
         reinterpret_cast<const Elf64_Phdr*>(static_cast<const uint8_t*>(libraryBase) + eh->e_phoff);
     uint64_t hash = 0xcbf29ce484222325ULL;
     for (int i = 0; i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD || (ph[i].p_flags & PF_W))
             continue;
+        // A file range larger than its memory range, or one that wraps the
+        // address space, cannot describe a segment this process mapped.
+        if (ph[i].p_filesz > ph[i].p_memsz || ph[i].p_vaddr > UINT64_MAX - ph[i].p_filesz)
+            return false;
         const auto* start = static_cast<const uint8_t*>(libraryBase) + ph[i].p_vaddr;
         for (Elf64_Xword j = 0; j < ph[i].p_filesz; j++)
             hash = (hash ^ start[j]) * 0x100000001b3ULL;
