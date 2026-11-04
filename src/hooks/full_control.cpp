@@ -628,9 +628,8 @@ bool resolveFields() {
 
 void installFullControlHooks() {
     ready = resolveFields() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
-            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr &&
-            target(T_KICK_SEND).addr && target(T_ROOM_CLOSE_SEND).addr &&
-            target(T_EXPLOSION_PLAYER_SEND).addr &&
+            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
+            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_PLAYER_SEND).addr &&
             target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr;
     if (!ready) {
         LOGE("Full control fields missing; chat commands stay off");
