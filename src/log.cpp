@@ -62,6 +62,22 @@ void formatWaktu(char* out, size_t size, const char* pola) {
     std::strftime(out, size, pola, &tm);
 }
 
+// localtime_r dan strftime menghitung zona waktu pada setiap baris, padahal
+// beberapa baris biasanya berbagi detik yang sama. Cache thread-local membuat
+// hitungan itu hanya sekali per detik, tanpa kunci antar-thread.
+const char* waktuSekarang() {
+    thread_local std::time_t detik = 0;
+    thread_local char teks[16] = {};
+    std::time_t sekarang = std::time(nullptr);
+    if (sekarang != detik || !teks[0]) {
+        std::tm tm = {};
+        localtime_r(&sekarang, &tm);
+        std::strftime(teks, sizeof(teks), "%H:%M:%S", &tm);
+        detik = sekarang;
+    }
+    return teks;
+}
+
 // INFO diberi spasi tambahan sampai lima karakter supaya kolom pesan sejajar
 // dengan ERROR.
 const char* namaLevel(char tingkat) { return tingkat == 'E' ? "ERROR" : "INFO "; }
@@ -474,23 +490,27 @@ void bukaFileLog() {
 }
 
 void cetakLog(char tingkat, const char* fmt, ...) {
-    char pesan[400];
+    // Prefiks dan pesan ditulis ke satu buffer, jadi tidak ada salinan 400 byte
+    // per baris sebelum barisnya ditempel.
+    char baris[512];
+    int awal = snprintf(baris, sizeof(baris), "[%s] %s ", waktuSekarang(), namaLevel(tingkat));
+    if (awal <= 0 || awal >= static_cast<int>(sizeof(baris)) - 1)
+        return;
+
     va_list argumen;
     va_start(argumen, fmt);
-    vsnprintf(pesan, sizeof(pesan), fmt, argumen);
+    int isi = vsnprintf(baris + awal, sizeof(baris) - static_cast<size_t>(awal) - 1, fmt, argumen);
     va_end(argumen);
-
-    char waktu[16];
-    formatWaktu(waktu, sizeof(waktu), "%H:%M:%S");
-    char baris[512];
-    int n = snprintf(baris, sizeof(baris), "[%s] %s %s\n", waktu, namaLevel(tingkat), pesan);
-    if (n <= 0)
+    if (isi < 0)
         return;
-    // snprintf melaporkan panjang sebelum pemotongan, jadi batasi dulu sebelum menulis.
-    if (n >= static_cast<int>(sizeof(baris)))
-        n = static_cast<int>(sizeof(baris)) - 1;
+
+    // vsnprintf melaporkan panjang sebelum pemotongan, jadi posisi newline dibatasi.
+    size_t akhir = static_cast<size_t>(awal) + static_cast<size_t>(isi);
+    if (akhir > sizeof(baris) - 2)
+        akhir = sizeof(baris) - 2;
+    baris[akhir++] = '\n';
     pastikanTerbuka();
-    tulisBaris(baris, n);
+    tulisBaris(baris, static_cast<int>(akhir));
 }
 
 void pasangLogCrash() {
