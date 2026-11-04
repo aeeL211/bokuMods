@@ -488,27 +488,15 @@ bool runCommand(Session& s, int argc, char** argv) {
     return false;
 }
 
-// A keyboard layout can send a lookalike slash, so every slash form marks a
-// command; the rest of the line still has to be plain ASCII.
-bool isCommandMark(uint16_t c) { return c == '/' || c == 0xFF0F || c == 0x2044 || c == 0x2215; }
-
-bool isHidden(uint16_t c) {
-    return c == 0xFEFF || c == 0x200B || c == 0x200E || c == 0x200F || c == 0x00A0;
-}
-
+// The line is copied without its leading slash, so the command table is matched
+// by name alone. Anything that is not plain printable ASCII stays ordinary chat.
 bool commandText(void* text, char* out, size_t size) {
     const uint16_t* chars = stringChars(text);
     int32_t len = stringLength(text);
-    if (!chars || len < 2)
+    if (!chars || len < 2 || chars[0] != '/')
         return false;
-    int32_t start = 0;
-    while (start + 1 < len && (chars[start] <= ' ' || isHidden(chars[start])))
-        start++;
-    if (!isCommandMark(chars[start]))
-        return false;
-    size_t n = 1;
-    out[0] = '/';
-    for (int32_t i = start + 1; i < len && n + 1 < size; i++) {
+    size_t n = 0;
+    for (int32_t i = 1; i < len && n + 1 < size; i++) {
         uint16_t code = chars[i];
         if (code < 0x20 || code > 0x7E)
             return false;
@@ -518,31 +506,12 @@ bool commandText(void* text, char* out, size_t size) {
     return true;
 }
 
-// A rejected line is dumped as code units, so a text layer that changes the
-// first character can be told apart from a string API that returns nothing.
-void logRejected(void* text) {
-    const uint16_t* chars = stringChars(text);
-    int32_t len = stringLength(text);
-    char units[64] = "";
-    int used = 0;
-    for (int32_t i = 0; chars && i < len && i < 8 && used < 40; i++) {
-        used +=
-            snprintf(units + used, sizeof(units) - static_cast<size_t>(used), "%04X ", chars[i]);
-    }
-    char plain[64];
-    if (!toUtf8(text, plain, sizeof(plain)))
-        snprintf(plain, sizeof(plain), "-");
-    LOGI("Chat text: ready=%d len=%d units=%s text=%s", ready ? 1 : 0, len, units, plain);
-}
-
 // A known command is answered locally and the box is cleared with the game's own
 // reset, so the typed line never reaches the network.
 bool handleCommand(void* chat, void* text) {
     char line[kLineSize];
-    if (!ready || !commandText(text, line, sizeof(line))) {
-        logRejected(text);
+    if (!ready || !commandText(text, line, sizeof(line)))
         return false;
-    }
     Session s;
     if (!openSession(chat, s)) {
         LOGE("Command session missing: no player or room");
