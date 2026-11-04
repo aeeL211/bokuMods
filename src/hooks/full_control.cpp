@@ -30,11 +30,12 @@ constexpr int kMaxPlayers = 16;
 constexpr int kMaxTokens = 8;
 constexpr int kPageCount = 3;
 constexpr size_t kLineSize = 240;
-constexpr size_t kNameSize = 48;
+constexpr size_t kNameSize = 96;
 constexpr size_t kKeySize = 16;
 constexpr double kShakeGap = 0.2;
 constexpr float kShakeMax = 90.0f;
 constexpr double kKickGap = 0.25;
+constexpr double kKickWindow = 8.0;
 constexpr size_t kKeyChars = 40;
 
 // The stock explosion shake is the strongest the game configures: eight rounds
@@ -60,7 +61,6 @@ Field guestAccount = {};
 Field accountName = {};
 Field playerPhy = {};
 Field multiTransfer = {};
-Field multiChat = {};
 Field transferPipe = {};
 Field transferHost = {};
 Field multiDisconnect = {};
@@ -81,17 +81,17 @@ struct Shake {
 
 Shake shake = {};
 
-// The kick packets are drained one guest per tick. The transfer helper has its
-// own update step, and a whole list sent in a single frame loses every packet
-// after the first, which is what left the players behind the host in the room.
+// The kick packets are paced one per tick. The queue holds only the target key
+// text taken when the command ran, so nothing in it points at a guest, a chat or
+// a player object that the next room or the next frame could free.
 struct KickAll {
     bool active;
     double next;
+    double end;
     int sent;
-    int pass;
-    void* room;
-    char done[kMaxPlayers][kKeyChars];
-    int doneCount;
+    int nextIndex;
+    int count;
+    char keys[kMaxPlayers][kKeyChars];
 };
 
 KickAll kickAll = {};
@@ -149,11 +149,57 @@ bool sameText(void* a, void* b) {
     return true;
 }
 
+// The answer text is UTF-8, because a player name is converted to UTF-8 before it
+// is put in a line, and the chat table stores UTF-16. Copying the bytes one to one
+// turned every non-ASCII name into broken symbols, so the text is decoded here.
+void utf8Step(const char* text, size_t& i, uint32_t& code) {
+    unsigned char lead = static_cast<unsigned char>(text[i]);
+    int extra = 0;
+    if (lead < 0x80) {
+        code = lead;
+        i += 1;
+        return;
+    }
+    if ((lead & 0xE0) == 0xC0) {
+        code = lead & 0x1F;
+        extra = 1;
+    } else if ((lead & 0xF0) == 0xE0) {
+        code = lead & 0x0F;
+        extra = 2;
+    } else if ((lead & 0xF8) == 0xF0) {
+        code = lead & 0x07;
+        extra = 3;
+    } else {
+        i += 1;
+        code = 0xFFFD;
+        return;
+    }
+    for (int k = 1; k <= extra; k++) {
+        unsigned char next = static_cast<unsigned char>(text[i + k]);
+        if ((next & 0xC0) != 0x80) {
+            i += 1;
+            code = 0xFFFD;
+            return;
+        }
+        code = (code << 6) | (next & 0x3F);
+    }
+    i += static_cast<size_t>(extra) + 1;
+}
+
 void* utf16Of(const char* text) {
     uint16_t buf[kLineSize];
     size_t n = 0;
-    for (; text[n] && n < kLineSize; n++)
-        buf[n] = static_cast<uint16_t>(static_cast<unsigned char>(text[n]));
+    for (size_t i = 0; text[i] && n + 2 < kLineSize;) {
+        uint32_t code = 0;
+        utf8Step(text, i, code);
+        if (code >= 0x10000) {
+            code -= 0x10000;
+            buf[n++] = static_cast<uint16_t>(0xD800 + (code >> 10));
+            buf[n++] = static_cast<uint16_t>(0xDC00 + (code & 0x3FF));
+        } else {
+            buf[n++] = static_cast<uint16_t>(code);
+        }
+    }
     return newUtf16String(buf, static_cast<int32_t>(n));
 }
 
@@ -261,15 +307,16 @@ bool openSession(void* chat, Session& s) {
 
 // The stock kick button sends two packets: the kick makes the guest show the
 // notice, and the guest remove takes it off every list. Both carry the sender
-// key, so the same override makes a client accept them as host packets.
-bool kickSlot(Session& s, const Slot& slot) {
-    void* key = slot.guest ? readPtr(slot.guest, guestKey) : nullptr;
-    void* pipe = pipeOf(s.multi);
+// key, so the same override makes a client accept them as host packets. A kick
+// needs only the target key and the pipe, so a queued key can be replayed later
+// without touching the guest object it came from.
+bool kickKey(void* multi, void* key) {
+    void* pipe = pipeOf(multi);
     auto kick = reinterpret_cast<KickFn>(target(T_KICK_SEND).addr);
     auto remove = reinterpret_cast<RemoveSendFn>(target(T_GUEST_REMOVE_SEND).addr);
     if (!key || !pipe || !kick)
         return false;
-    startSpoof(s.multi);
+    startSpoof(multi);
     kick(pipe, key, target(T_KICK_SEND).method);
     if (remove)
         remove(pipe, key, target(T_GUEST_REMOVE_SEND).method);
@@ -283,93 +330,43 @@ bool guestKeyText(void* guest, char* out) {
     return out[0] != '\0';
 }
 
-bool alreadyKicked(const char* key) {
-    for (int i = 0; i < kickAll.doneCount; i++) {
-        if (!strcmp(kickAll.done[i], key))
-            return true;
-    }
-    return false;
-}
-
-void rememberKicked(const char* key) {
-    if (kickAll.doneCount >= kMaxPlayers)
-        return;
-    snprintf(kickAll.done[kickAll.doneCount], kKeyChars, "%s", key);
-    kickAll.doneCount++;
-}
-
-// A guest is a target only while it still has a key, is not the host, and was not
-// kicked by an earlier tick. The list is read again every tick, so a guest who
-// already left cannot leave a stale pointer behind.
-bool nextKickTarget(Session& s, Slot& out) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    void* host = hostKeyOf(s.multi);
-    for (int i = 1; i < n; i++) {
-        char key[kKeyChars];
-        if (!guestKeyText(slots[i].guest, key))
-            continue;
-        if (sameText(readPtr(slots[i].guest, guestKey), host))
-            continue;
-        if (alreadyKicked(key))
-            continue;
-        out = slots[i];
-        rememberKicked(key);
-        return true;
-    }
-    return false;
-}
-
-void finishKickAll(Session& s) {
+void finishKickAll() {
     kickAll.active = false;
-    char line[kLineSize];
-    if (kickAll.sent == 0) {
-        reply(s, "Tidak ada tamu untuk ditendang");
+    LOGI("Kickall done: %d guests", kickAll.sent);
+    if (kickAll.sent == 0)
         return;
-    }
-    snprintf(line, sizeof(line), "Selesai: %d tamu ditendang", kickAll.sent);
-    reply(s, line);
+    char line[kLineSize];
+    snprintf(line, sizeof(line), "Kickall: %d tamu ditendang", kickAll.sent);
+    toast(line);
 }
 
-// The heartbeat runs while a room is open, which is what paces the drain. Every
-// tick reads the chat, the manager and the list again from the live room: the
-// chat object dies with the scene, so a stored one would dangle on the next join.
-// kickAll.room only ever compares as an identity, it is never read through.
+// The heartbeat runs while a room is open, which is what paces the drain. Only
+// the pipe and the manager are read here, and both come from objects the frame is
+// using right now, so a queue left over a room change can only fire at strangers.
 void kickAllTick(void* self) {
     if (!kickAll.active)
         return;
-    void* manager = readPtr(self, guestManagerA);
-    void* chat = readPtr(readPtr(manager, managerMulti), multiChat);
-    if (!chat || chat != kickAll.room) {
-        LOGI("Kickall stopped: room changed");
-        kickAll.active = false;
+    double now = nowSeconds();
+    if (kickAll.nextIndex >= kickAll.count || now > kickAll.end) {
+        finishKickAll();
         return;
     }
-    double now = nowSeconds();
     if (now < kickAll.next)
         return;
-    kickAll.next = now + kKickGap;
-    Session s;
-    if (!openSession(chat, s)) {
-        LOGI("Kickall stopped: chat missing");
+    void* multi = readPtr(readPtr(self, guestManagerA), managerMulti);
+    if (!multi) {
+        LOGI("Kickall stopped: room gone");
         kickAll.active = false;
         return;
     }
-    Slot target = {};
-    if (nextKickTarget(s, target)) {
-        if (kickSlot(s, target))
-            kickAll.sent++;
-        else
-            LOGE("Kick failed: guest has no key or pipe");
-        return;
-    }
-    if (kickAll.pass == 0) {
-        kickAll.pass = 1;
-        kickAll.doneCount = 0;
-        kickAll.next = now + kKickGap * 4;
-        return;
-    }
-    finishKickAll(s);
+    kickAll.next = now + kKickGap;
+    LOGI("Kickall: %d of %d", kickAll.nextIndex + 1, kickAll.count);
+    void* key = utf16Of(kickAll.keys[kickAll.nextIndex]);
+    kickAll.nextIndex++;
+    if (kickKey(multi, key))
+        kickAll.sent++;
+    else
+        LOGE("Kick failed: guest has no key or pipe");
 }
 
 // The camera hook drops both stock entry points, so the local half of a shake
@@ -426,6 +423,9 @@ void updateHook(void* self, void* method) {
     auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_GUEST_UPDATE).orig);
     if (orig)
         orig(self, method);
+    // A game call that unwinds through a send would skip the matching stop, and a
+    // leaked override makes every later key lookup answer with the host key.
+    stopSpoof();
     shakeTick(self);
     kickAllTick(self);
 }
@@ -516,44 +516,43 @@ void kickCommand(Session& s, int, char** argv) {
         reply(s, "Host tidak bisa ditendang");
         return;
     }
-    if (!kickSlot(s, slots[index - 1])) {
+    if (!kickKey(s.multi, readPtr(slots[index - 1].guest, guestKey))) {
         reply(s, "Tendangan gagal");
         return;
     }
     reply(s, "Tendangan terkirim");
 }
 
-// The host is listed as an ordinary guest, and the packets cannot all leave in one
-// frame, so the command only arms the drain and the guest update kicks one guest
-// per tick. The log names every slot, so a room that keeps somebody says why.
+// The host is listed as an ordinary guest, and one frame cannot carry every
+// packet, so the command only fills the queue and the guest update sends one kick
+// per tick. The queue holds key text, never a guest or chat pointer, so it stays
+// valid while the room changes under it.
 void kickAllCommand(Session& s, int, char**) {
-    if (!multiChat.field) {
-        reply(s, "Kickall tidak tersedia");
-        return;
-    }
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
     void* host = hostKeyOf(s.multi);
-    int guests = 0;
-    for (int i = 1; i < n; i++) {
+    int count = 0;
+    for (int i = 1; i < n && count < kMaxPlayers; i++) {
         char key[kKeyChars];
-        bool hasKey = guestKeyText(slots[i].guest, key);
-        bool isHost = sameText(readPtr(slots[i].guest, guestKey), host);
-        LOGI("Kickall slot %d: %s%s", i + 1, hasKey ? key : "no key", isHost ? " host" : "");
-        if (hasKey && !isHost)
-            guests++;
+        if (!guestKeyText(slots[i].guest, key))
+            continue;
+        if (sameText(readPtr(slots[i].guest, guestKey), host))
+            continue;
+        snprintf(kickAll.keys[count], kKeyChars, "%s", key);
+        LOGI("Kickall queue %d: %s", count + 1, key);
+        count++;
     }
-    LOGI("Kickall start: %d guests of %d slots", guests, n);
-    if (guests == 0) {
+    LOGI("Kickall start: %d guests of %d slots", count, n);
+    if (count == 0) {
         reply(s, "Tidak ada tamu untuk ditendang");
         return;
     }
     kickAll.active = true;
     kickAll.next = 0.0;
+    kickAll.end = nowSeconds() + kKickWindow;
     kickAll.sent = 0;
-    kickAll.pass = 0;
-    kickAll.doneCount = 0;
-    kickAll.room = s.chat;
+    kickAll.nextIndex = 0;
+    kickAll.count = count;
     reply(s, "Menendang tamu satu per satu");
 }
 
@@ -803,10 +802,6 @@ bool resolveFields() {
     if (!resolveField(transferClass, "pipe", transferPipe) ||
         !resolveField(transferClass, "host", transferHost))
         return false;
-
-    // The drain re-reads the chat from the live room every tick, because the chat
-    // object is rebuilt on every join and a stored one would outlive it.
-    resolveField(fieldClass(managerMulti), "chat", multiChat);
 
     // The guest manager frame callback drives the timed shake, so its manager
     // pointer is resolved the same way as every other field.

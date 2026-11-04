@@ -93,9 +93,9 @@ benar-benar kosong dan hilang dari daftar. Tamu yang mengetik `/close` dijawab
 di room yang sedang dimasuki, dan tamu tetap bisa memakai `/kick`, `/kickall`, dan `/shake`.
 `/kickall` menendang semua tamu kecuali host, jadi room tetap hidup dan hanya tersisa host dan
 diri sendiri; `/kick` yang menyasar nomor host dijawab `Host tidak bisa ditendang`. `/kickall`
-menjawab `Menendang tamu satu per satu`, lalu menendang satu tamu tiap 0,25 detik dan menutup
-dengan `Selesai: N tamu ditendang`, karena beberapa paket dalam satu frame hanya yang pertama
-yang sampai.
+menjawab `Menendang tamu satu per satu`, lalu menendang satu tamu tiap 0,25 detik, dan menutup
+dengan toast `Kickall: N tamu ditendang`, karena beberapa paket dalam satu frame hanya yang
+pertama yang sampai.
 
 ## Pemasangan
 
