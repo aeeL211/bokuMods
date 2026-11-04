@@ -18,26 +18,32 @@ namespace {
 constexpr int32_t kBatasKarakterModel = 16384;
 constexpr size_t kBatasByteModel = static_cast<size_t>(kBatasKarakterModel) * 3 + 1;
 // Satu entri per skin berbeda yang bisa tampil dalam satu sesi; pengulangan hanya
-// memakan satu perbandingan.
+// memakan satu pencarian tabel.
 constexpr int kBatasHash = 512;
+constexpr int kUkuranTabelHash = 1024;
+constexpr int kTopengTabelHash = kUkuranTabelHash - 1;
 constexpr int kBatasSlot = 1000;
 constexpr size_t kBatasBytePath = 1024;
 // Id pengguna itu pendek; yang lebih panjang tidak layak jadi entri map.
 constexpr size_t kBatasBytePengguna = 64;
+// Berkas dibaca per potongan, jadi tidak ada buffer sebesar string model.
+constexpr size_t kBatasBytePotongan = 1024;
+constexpr uint64_t kAwalHash = 1469598103934665603ull;
+constexpr uint64_t kPrimaHash = 1099511628211ull;
 
 char teksModel[kBatasByteModel];
 char teksPath[kBatasBytePath];
-char teksBerkas[kBatasByteModel];
 
-uint64_t hashModel[kBatasHash];
+uint64_t tabelHash[kUkuranTabelHash];
 int jumlahHashModel = 0;
 int slotBerikut = 1;
 bool slotSiap = false;
 
 // Slot yang tersimpan dan pengguna asalnya, supaya nama tampilan yang datang
-// belakangan bisa ditulis di samping model miliknya.
+// belakangan bisa ditulis di samping model miliknya. Pengguna disimpan sebagai
+// hash supaya perbandingannya satu angka, bukan satu string.
 struct SlotPengguna {
-    char pengguna[kBatasBytePengguna];
+    uint64_t pengguna;
     int slot;
 };
 
@@ -51,26 +57,42 @@ Field fieldNamaBerkas = {};
 bool fieldSiap = false;
 bool sudahCatatTidakSiap = false;
 
-uint64_t hashTeks(const char* teks, size_t panjang) {
-    uint64_t hasil = 1469598103934665603ull;
+uint64_t hashTeks(const char* teks, size_t panjang, uint64_t awal = kAwalHash) {
+    uint64_t hasil = awal;
     for (size_t i = 0; i < panjang; i++) {
         hasil ^= static_cast<uint8_t>(teks[i]);
-        hasil *= 1099511628211ull;
+        hasil *= kPrimaHash;
     }
     return hasil;
 }
 
+// Tabel terbuka dengan indeks dari hash itu sendiri, jadi skin yang sudah ada
+// ditemukan tanpa memindai daftar. Nol menandai slot kosong, dan hash nol
+// dipindahkan ke satu supaya tidak pernah terbaca sebagai slot kosong.
 bool hashTercatat(uint64_t nilai) {
-    for (int i = 0; i < jumlahHashModel; i++) {
-        if (hashModel[i] == nilai)
+    if (!nilai)
+        nilai = 1;
+    int i = static_cast<int>(nilai & kTopengTabelHash);
+    while (tabelHash[i] != 0) {
+        if (tabelHash[i] == nilai)
             return true;
+        i = (i + 1) & kTopengTabelHash;
     }
     return false;
 }
 
 void catatHash(uint64_t nilai) {
-    if (jumlahHashModel < kBatasHash)
-        hashModel[jumlahHashModel++] = nilai;
+    if (jumlahHashModel >= kBatasHash)
+        return;
+    if (!nilai)
+        nilai = 1;
+    int i = static_cast<int>(nilai & kTopengTabelHash);
+    while (tabelHash[i] != 0 && tabelHash[i] != nilai)
+        i = (i + 1) & kTopengTabelHash;
+    if (tabelHash[i] == nilai)
+        return;
+    tabelHash[i] = nilai;
+    jumlahHashModel++;
 }
 
 // Folder model dimiliki Manager yang sama dengan pemegang daftar tamu, jadi
@@ -115,17 +137,25 @@ void tulisNamaSlot(void* model, int slot, void* text) {
 }
 
 // Skin dari sesi sebelumnya sudah memiliki slotnya, jadi hash setiap Data.txt di
-// disk dimuat sekali dan penulisan berikutnya melanjutkan setelahnya.
+// disk dibaca sekali dan penulisan berikutnya melanjutkan setelahnya. Isinya
+// dibaca per potongan supaya tidak perlu buffer sebesar string model.
 bool bacaSlot(void* model, int slot) {
     if (!pathSlot(model, slot))
         return false;
     int fd = open(teksPath, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return false;
-    ssize_t n = read(fd, teksBerkas, sizeof(teksBerkas) - 1);
+    char potongan[kBatasBytePotongan];
+    uint64_t nilai = kAwalHash;
+    bool adaIsi = false;
+    ssize_t n = 0;
+    while ((n = read(fd, potongan, sizeof(potongan))) > 0) {
+        nilai = hashTeks(potongan, static_cast<size_t>(n), nilai);
+        adaIsi = true;
+    }
     close(fd);
-    if (n > 0)
-        catatHash(hashTeks(teksBerkas, static_cast<size_t>(n)));
+    if (adaIsi)
+        catatHash(nilai);
     return true;
 }
 
@@ -153,12 +183,13 @@ int simpanModel(void* manajerTamu, void* modelStr) {
     }
     if (!keUtf8(modelStr, teksModel, sizeof(teksModel)))
         return 0;
+    size_t panjang = strlen(teksModel);
 
     if (!slotSiap) {
         slotSiap = true;
         isiSlotAwal(model);
     }
-    uint64_t nilai = hashTeks(teksModel, strlen(teksModel));
+    uint64_t nilai = hashTeks(teksModel, panjang);
     if (hashTercatat(nilai))
         return 0;
     if (slotBerikut > kBatasSlot) {
@@ -172,7 +203,7 @@ int simpanModel(void* manajerTamu, void* modelStr) {
         return 0;
     }
     catatHash(nilai);
-    LOGI("Skin tersimpan: slot %d (%zu byte)", slotBerikut, strlen(teksModel));
+    LOGI("Skin tersimpan: slot %d (%zu byte)", slotBerikut, panjang);
     return slotBerikut++;
 }
 
@@ -180,7 +211,7 @@ void catatPengguna(void* user, int slot) {
     char teks[kBatasBytePengguna];
     if (jumlahSlotPengguna >= kBatasHash || !keUtf8(user, teks, sizeof(teks)))
         return;
-    memcpy(daftarSlotPengguna[jumlahSlotPengguna].pengguna, teks, strlen(teks) + 1);
+    daftarSlotPengguna[jumlahSlotPengguna].pengguna = hashTeks(teks, strlen(teks));
     daftarSlotPengguna[jumlahSlotPengguna].slot = slot;
     jumlahSlotPengguna++;
 }
@@ -195,8 +226,9 @@ void tulisNamaPengguna(void* manajerTamu, void* user, void* name) {
     if (!model)
         return;
 
+    uint64_t pengguna = hashTeks(teks, strlen(teks));
     for (int i = 0; i < jumlahSlotPengguna; i++) {
-        if (strcmp(daftarSlotPengguna[i].pengguna, teks))
+        if (daftarSlotPengguna[i].pengguna != pengguna)
             continue;
         tulisNamaSlot(model, daftarSlotPengguna[i].slot, name);
         LOGI("Nama skin: slot %d", daftarSlotPengguna[i].slot);
