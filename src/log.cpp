@@ -111,10 +111,9 @@ bool filesDir(char* out, size_t size) {
     }
     if (activity) {
         jclass activityClass = env->GetObjectClass(activity);
-        jmethodID getDir =
-            activityClass ? env->GetMethodID(activityClass, "getExternalFilesDir",
-                                             "(Ljava/lang/String;)Ljava/io/File;")
-                          : nullptr;
+        jmethodID getDir = activityClass ? env->GetMethodID(activityClass, "getExternalFilesDir",
+                                                            "(Ljava/lang/String;)Ljava/io/File;")
+                                         : nullptr;
         if (getDir)
             dir = env->CallObjectMethod(activity, getDir, nullptr);
         if (activityClass)
