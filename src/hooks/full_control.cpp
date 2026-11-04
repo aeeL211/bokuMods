@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include "hook.h"
 #include "il2cpp_api.h"
@@ -19,18 +20,26 @@ using KeyFn = void* (*)(void*, void*);
 using KickFn = void (*)(void*, void*, void*);
 using EmptySendFn = void (*)(void*, void*);
 using ClearFn = void (*)(void*, void*);
-using ExplosionFn = void (*)(void*, int32_t, float, float, int32_t, void*);
 using ShakeSendFn = void (*)(void*, float, float, void*);
+using ShakeFn = void (*)(void*, int32_t, float, void*);
 using AddTextFn = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
 using RemoveSendFn = void (*)(void*, void*, void*);
 using LocalCloseFn = void (*)(void*, void*);
 
 constexpr int kMaxPlayers = 16;
 constexpr int kMaxTokens = 8;
+constexpr int kPageCount = 3;
 constexpr size_t kLineSize = 240;
 constexpr size_t kNameSize = 48;
 constexpr size_t kKeySize = 16;
-constexpr int32_t kExplosionStep = 1;
+constexpr double kShakeGap = 0.2;
+constexpr float kShakeMax = 30.0f;
+
+// The stock explosion shake is the strongest the game configures: eight rounds
+// at the full camera offset. The camera hooks drop every stock call, so the
+// timed shake feeds these values straight to the original.
+constexpr int32_t kShakeRounds = 8;
+constexpr float kShakeOffset = 1.0f;
 
 Field chatManager = {};
 Field chatInput = {};
@@ -45,8 +54,6 @@ Field managerPlayer = {};
 Field guestsItems = {};
 Field guestsSize = {};
 Field guestKey = {};
-Field guestZone = {};
-Field guestPhy = {};
 Field guestAccount = {};
 Field accountName = {};
 Field playerPhy = {};
@@ -56,7 +63,18 @@ Field transferHost = {};
 Field multiClient = {};
 Field physicsPos = {};
 Field posWorld = {};
+Field guestManagerA = {};
 bool ready = false;
+
+// The timed shake keeps the start instant and the next send instant on a clock
+// the game cannot pause, so a slow frame does not stretch the requested time.
+struct Shake {
+    double next;
+    double end;
+    bool active;
+};
+
+Shake shake = {};
 
 // A host-only packet passes the receiver because the payload carries the key of
 // the sender, and the receiver only compares that string. The override lives on
@@ -69,6 +87,7 @@ struct Slot {
 };
 
 struct Session {
+    void* manager;
     void* chat;
     void* multi;
     void* player;
@@ -76,6 +95,12 @@ struct Session {
     int32_t senderId;
     bool canReply;
 };
+
+double nowSeconds() {
+    timespec ts = {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
+}
 
 void readPoint(void* obj, const Field& f, float& x, float& y) {
     x = 0.0f;
@@ -201,6 +226,7 @@ void* fieldText(void* chat) { return readPtr(readPtr(chat, chatInput), inputText
 
 bool openSession(void* chat, Session& s) {
     void* manager = readPtr(chat, chatManager);
+    s.manager = manager;
     s.chat = chat;
     s.player = readPtr(manager, managerPlayer);
     s.multi = readPtr(manager, managerMulti);
@@ -231,14 +257,61 @@ bool kickSlot(Session& s, const Slot& slot) {
     return true;
 }
 
-void explodeAt(Session& s, int32_t zone, float x, float y) {
+// The camera hook drops both stock entry points, so the local half of a shake
+// goes through the original of the two-argument call.
+void applyShake(void* camera, int32_t rounds, float offset) {
+    auto shake = reinterpret_cast<ShakeFn>(target(T_SHAKE_NUM).orig);
+    if (shake && camera)
+        shake(camera, rounds, offset, target(T_SHAKE_NUM).method);
+}
+
+// One shake round at the game's top strength: the local camera is shaken here,
+// and the packet puts the other clients' cameras on the same spot.
+void shakeOnce(Session& s) {
+    void* camera = readPtr(s.manager, managerCamera);
+    applyShake(camera, kShakeRounds, kShakeOffset);
     void* host = hostOf(s.multi);
-    auto send = reinterpret_cast<ExplosionFn>(target(T_EXPLOSION_PLAYER_SEND).addr);
+    auto send = reinterpret_cast<ShakeSendFn>(target(T_EXPLOSION_SHAKE_SEND).addr);
     if (!host || !send)
         return;
+    float x = 0.0f;
+    float y = 0.0f;
+    readPoint(readPtr(readPtr(s.player, playerPhy), physicsPos), posWorld, x, y);
     startSpoof(s.multi);
-    send(host, zone, x, y, kExplosionStep, target(T_EXPLOSION_PLAYER_SEND).method);
+    send(host, x, y, target(T_EXPLOSION_SHAKE_SEND).method);
     stopSpoof();
+}
+
+// The guest manager updates every frame while a room is open, which is the
+// heartbeat the timed shake needs; the chat panel can be closed mid-shake.
+void shakeTick(void* self) {
+    if (!shake.active)
+        return;
+    double now = nowSeconds();
+    void* manager = readPtr(self, guestManagerA);
+    void* camera = readPtr(manager, managerCamera);
+    if (now >= shake.end) {
+        shake.active = false;
+        applyShake(camera, 0, 0.0f);
+        return;
+    }
+    if (now < shake.next)
+        return;
+    shake.next = now + kShakeGap;
+    Session s = {};
+    s.manager = manager;
+    s.multi = readPtr(manager, managerMulti);
+    s.player = readPtr(manager, managerPlayer);
+    if (!s.multi || !s.player)
+        return;
+    shakeOnce(s);
+}
+
+void updateHook(void* self, void* method) {
+    auto orig = reinterpret_cast<void (*)(void*, void*)>(target(T_GUEST_UPDATE).orig);
+    if (orig)
+        orig(self, method);
+    shakeTick(self);
 }
 
 int split(char* text, char** out, int max) {
@@ -274,38 +347,24 @@ void kickCommand(Session&, int, char**);
 void kickAllCommand(Session&, int, char**);
 void closeCommand(Session&, int, char**);
 void shakeCommand(Session&, int, char**);
-void explodeCommand(Session&, int, char**);
-void boomCommand(Session&, int, char**);
 void menuCommand(Session&, int, char**);
 void helpCommand(Session&, int, char**);
 void statusCommand(Session&, int, char**);
 void logCommand(Session&, int, char**);
 
 const Command commands[] = {
-    {"list", 0, 0, 3, listCommand, "/list - show players with their number"},
-    {"kick", 1, 1, 1, kickCommand, "/kick <n> - kick player number n"},
-    {"kickall", 0, 0, 1, kickAllCommand, "/kickall - kick every other player"},
-    {"close", 0, 0, 1, closeCommand, "/close - close the room"},
-    {"shake", 0, 0, 2, shakeCommand, "/shake - shake every camera"},
-    {"explode", 1, 1, 2, explodeCommand, "/explode <n> - explode at player number n"},
-    {"boom", 2, 3, 2, boomCommand, "/boom <x> <y> [zone] - explode at a point"},
-    {"menu", 0, 1, 3, menuCommand, "/menu [1-3] - show the command menu"},
-    {"help", 1, 1, 3, helpCommand, "/help <command> - explain one command"},
-    {"status", 0, 0, 3, statusCommand, "/status - show connection details"},
-    {"log", 0, 0, 3, logCommand, "/log - show the session log path"},
+    {"list", 0, 0, 3, listCommand, "/list - daftar pemain dan nomornya"},
+    {"kick", 1, 1, 1, kickCommand, "/kick <n> - tendang pemain nomor n"},
+    {"kickall", 0, 0, 1, kickAllCommand, "/kickall - tendang semua pemain lain"},
+    {"close", 0, 0, 1, closeCommand, "/close - tutup room lalu keluar"},
+    {"shake", 1, 1, 2, shakeCommand, "/shake <detik> - getarkan kamera paling kuat"},
+    {"menu", 0, 1, 3, menuCommand, "/menu [1-3|-a] - daftar perintah"},
+    {"help", 1, 1, 3, helpCommand, "/help <perintah|-a> - penjelasan perintah"},
+    {"status", 0, 0, 3, statusCommand, "/status - detail koneksi"},
+    {"log", 0, 0, 3, logCommand, "/log - lokasi file log sesi ini"},
 };
 
 constexpr int kCommandCount = sizeof(commands) / sizeof(commands[0]);
-
-int32_t firstZone(Session& s) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    for (int i = 1; i < n; i++) {
-        if (slots[i].guest)
-            return readInt(slots[i].guest, guestZone);
-    }
-    return 0;
-}
 
 void listCommand(Session& s, int, char**) {
     Slot slots[kMaxPlayers];
@@ -315,7 +374,7 @@ void listCommand(Session& s, int, char**) {
     char line[kLineSize];
     for (int i = 0; i < n; i++) {
         if (!slots[i].guest) {
-            snprintf(line, sizeof(line), "#%d you", i + 1);
+            snprintf(line, sizeof(line), "#%d kamu", i + 1);
         } else {
             stringOf(accountNameOf(slots[i].guest), name, sizeof(name), "?");
             bool isHost = sameText(readPtr(slots[i].guest, guestKey), host);
@@ -330,18 +389,18 @@ void kickCommand(Session& s, int, char** argv) {
     int n = collectPlayers(s.chat, s.key, slots);
     int index = atoi(argv[0]);
     if (index < 1 || index > n) {
-        reply(s, "No such player");
+        reply(s, "Pemain nomor itu tidak ada");
         return;
     }
     if (!slots[index - 1].guest) {
-        reply(s, "You cannot kick yourself");
+        reply(s, "Tidak bisa menendang diri sendiri");
         return;
     }
     if (!kickSlot(s, slots[index - 1])) {
-        reply(s, "Kick failed");
+        reply(s, "Tendangan gagal");
         return;
     }
-    reply(s, "Kick sent");
+    reply(s, "Tendangan terkirim");
 }
 
 void kickAllCommand(Session& s, int, char**) {
@@ -356,10 +415,10 @@ void kickAllCommand(Session& s, int, char**) {
     }
     char line[kLineSize];
     if (sent == 0) {
-        reply(s, "No player to kick");
+        reply(s, "Tidak ada pemain untuk ditendang");
         return;
     }
-    snprintf(line, sizeof(line), "Kick sent to %d player(s)", sent);
+    snprintf(line, sizeof(line), "Tendangan terkirim ke %d pemain", sent);
     reply(s, line);
 }
 
@@ -374,7 +433,7 @@ void closeCommand(Session& s, int, char**) {
     bool canSend = pipe && send;
     bool canLeave = close && client;
     if (!canSend && !canLeave) {
-        reply(s, "Room close unavailable");
+        reply(s, "Tutup room tidak tersedia");
         return;
     }
     if (canSend) {
@@ -382,60 +441,27 @@ void closeCommand(Session& s, int, char**) {
         send(pipe, target(T_ROOM_CLOSE_SEND).method);
         stopSpoof();
     }
-    reply(s, canSend ? "Room closed" : "Room closed on this device only");
+    reply(s, canSend ? "Room ditutup" : "Room ditutup di perangkat ini saja");
     if (canLeave)
         close(client, target(T_ROOM_CLOSE).method);
 }
 
-void shakeCommand(Session& s, int, char**) {
-    void* host = hostOf(s.multi);
-    auto send = reinterpret_cast<ShakeSendFn>(target(T_EXPLOSION_SHAKE_SEND).addr);
-    if (!host || !send) {
-        reply(s, "Camera shake unavailable");
+// The seconds are capped so a typo cannot hammer every client with packets; the
+// timer itself is advanced by the guest update hook, never by a blocking loop.
+void shakeCommand(Session& s, int, char** argv) {
+    float seconds = strtof(argv[0], nullptr);
+    if (seconds <= 0.0f) {
+        reply(s, "Detik harus lebih dari nol");
         return;
     }
-    float x = 0.0f;
-    float y = 0.0f;
-    readPoint(readPtr(readPtr(s.player, playerPhy), physicsPos), posWorld, x, y);
-    startSpoof(s.multi);
-    send(host, x, y, target(T_EXPLOSION_SHAKE_SEND).method);
-    stopSpoof();
-
-    // The camera shake hook drops every call, so this device is shaken through
-    // the original instead of the packet it just sent.
-    auto shake = reinterpret_cast<void (*)(void*, void*)>(target(T_SHAKE).orig);
-    void* camera = readPtr(readPtr(s.chat, chatManager), managerCamera);
-    if (shake && camera)
-        shake(camera, target(T_SHAKE).method);
-    reply(s, "Camera shake sent");
-}
-
-void explodeCommand(Session& s, int, char** argv) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(s.chat, s.key, slots);
-    int index = atoi(argv[0]);
-    if (index < 1 || index > n) {
-        reply(s, "No such player");
-        return;
-    }
-    if (!slots[index - 1].guest) {
-        reply(s, "Pick a guest, not yourself");
-        return;
-    }
-    void* guest = slots[index - 1].guest;
-    float x = 0.0f;
-    float y = 0.0f;
-    readPoint(readPtr(readPtr(guest, guestPhy), physicsPos), posWorld, x, y);
-    explodeAt(s, readInt(guest, guestZone), x, y);
-    reply(s, "Explosion sent");
-}
-
-void boomCommand(Session& s, int argc, char** argv) {
-    float x = strtof(argv[0], nullptr);
-    float y = strtof(argv[1], nullptr);
-    int32_t zone = argc > 2 ? atoi(argv[2]) : firstZone(s);
-    explodeAt(s, zone, x, y);
-    reply(s, "Explosion sent");
+    if (seconds > kShakeMax)
+        seconds = kShakeMax;
+    shake.active = true;
+    shake.next = 0.0;
+    shake.end = nowSeconds() + seconds;
+    char line[kLineSize];
+    snprintf(line, sizeof(line), "Getar kamera paling kuat %.1f detik", seconds);
+    reply(s, line);
 }
 
 void statusCommand(Session& s, int, char**) {
@@ -445,44 +471,57 @@ void statusCommand(Session& s, int, char**) {
     char line[kLineSize];
     stringOf(s.key, own, sizeof(own), "?");
     stringOf(hostKey, host, sizeof(host), "?");
-    snprintf(line, sizeof(line), "You: %s", own);
+    snprintf(line, sizeof(line), "Key kamu: %s", own);
     reply(s, line);
-    snprintf(line, sizeof(line), "Host: %s", host);
+    snprintf(line, sizeof(line), "Key host: %s", host);
     reply(s, line);
-    reply(s, sameText(s.key, hostKey) ? "Master: yes" : "Master: no");
+    reply(s, sameText(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
     Slot slots[kMaxPlayers];
-    snprintf(line, sizeof(line), "Players: %d", collectPlayers(s.chat, s.key, slots));
+    snprintf(line, sizeof(line), "Pemain: %d", collectPlayers(s.chat, s.key, slots));
     reply(s, line);
 }
 
 void logCommand(Session& s, int, char**) {
     const char* path = logFilePath();
-    reply(s, path ? path : "Log file not open");
+    reply(s, path ? path : "File log belum dibuka");
 }
 
 void menuCommand(Session& s, int argc, char** argv) {
-    int page = argc > 0 ? atoi(argv[0]) : 1;
-    if (page < 1 || page > 3) {
-        reply(s, "Menu pages are 1 to 3");
-        return;
+    int from = 1;
+    int to = kPageCount;
+    if (argc > 0 && strcmp(argv[0], "-a")) {
+        int page = atoi(argv[0]);
+        if (page < 1 || page > kPageCount) {
+            reply(s, "Halaman menu 1 sampai 3, atau -a");
+            return;
+        }
+        from = page;
+        to = page;
     }
     char header[32];
-    snprintf(header, sizeof(header), "FULL CONTROL %d/3", page);
-    reply(s, header);
-    for (int i = 0; i < kCommandCount; i++) {
-        if (commands[i].page == page)
-            reply(s, commands[i].usage);
+    for (int page = from; page <= to; page++) {
+        snprintf(header, sizeof(header), "KONTROL PENUH %d/%d", page, kPageCount);
+        reply(s, header);
+        for (int i = 0; i < kCommandCount; i++) {
+            if (commands[i].page == page)
+                reply(s, commands[i].usage);
+        }
     }
 }
 
 void helpCommand(Session& s, int, char** argv) {
+    if (!strcmp(argv[0], "-a")) {
+        for (int i = 0; i < kCommandCount; i++)
+            reply(s, commands[i].usage);
+        return;
+    }
     for (int i = 0; i < kCommandCount; i++) {
         if (strcmp(commands[i].name, argv[0]))
             continue;
         reply(s, commands[i].usage);
         return;
     }
-    reply(s, "No such command");
+    reply(s, "Perintah tidak dikenal");
 }
 
 // Only a known command is taken off the wire; anything else starting with a
@@ -594,8 +633,6 @@ bool resolveFields() {
 
     void* guestClass = fieldElementClass(guestsItems);
     if (!resolveField(guestClass, "key", guestKey) ||
-        !resolveField(guestClass, "zone", guestZone) ||
-        !resolveField(guestClass, "phy", guestPhy) ||
         !resolveField(guestClass, "account", guestAccount))
         return false;
     if (!resolveField(fieldClass(guestAccount), "user_Name", accountName))
@@ -603,7 +640,7 @@ bool resolveFields() {
     if (!resolveField(fieldClass(managerPlayer), "phy", playerPhy))
         return false;
 
-    if (!resolveField(fieldClass(guestPhy), "pos", physicsPos))
+    if (!resolveField(fieldClass(playerPhy), "pos", physicsPos))
         return false;
     if (!resolveField(fieldClass(physicsPos), "world", posWorld))
         return false;
@@ -613,6 +650,11 @@ bool resolveFields() {
     void* transferClass = fieldClass(multiTransfer);
     if (!resolveField(transferClass, "pipe", transferPipe) ||
         !resolveField(transferClass, "host", transferHost))
+        return false;
+
+    // The guest manager frame callback drives the timed shake, so its manager
+    // pointer is resolved the same way as every other field.
+    if (!resolveField(classOf("Guest__Manager"), "a", guestManagerA))
         return false;
 
     // Replies and the local half of /close degrade on their own: a missing field
@@ -629,8 +671,8 @@ bool resolveFields() {
 void installFullControlHooks() {
     ready = resolveFields() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
             target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
-            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_PLAYER_SEND).addr &&
-            target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr;
+            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_SHAKE_SEND).addr &&
+            target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr;
     if (!ready) {
         LOGE("Full control fields missing; chat commands stay off");
         return;
@@ -639,4 +681,5 @@ void installFullControlHooks() {
     installHook(target(T_CHAT_SEND), reinterpret_cast<void*>(sendHook));
     installHook(target(T_INPUT_SEND), reinterpret_cast<void*>(sendButtonHook));
     installHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(keyHook));
+    installHook(target(T_GUEST_UPDATE), reinterpret_cast<void*>(updateHook));
 }

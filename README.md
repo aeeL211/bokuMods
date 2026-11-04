@@ -52,15 +52,17 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
   profil bisa memakai kata apa pun.
 - **Versi tidak jelas** — label versi diberi akhiran "(modded)".
 - **Kontrol room lewat chat** — perintah chat menjalankan aksi tingkat host: kick, tutup room,
-  getar kamera, dan ledakan. Baris perintah tidak pernah dikirim ke pemain lain.
+  dan getar kamera. Jawaban perintah memakai bahasa Indonesia, dan baris perintah tidak pernah
+  dikirim ke pemain lain.
 
 ## Perintah chat
 
 Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
 Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat room perangkat
-sendiri sebagai baris dari diri sendiri, dan kotak chat langsung dikosongkan. Kalau objek pesan
-game tidak tersedia, jawaban tampil sebagai toast. Teks yang diawali `/` tapi bukan perintah
-yang dikenal tetap terkirim sebagai chat biasa.
+sendiri sebagai baris dari diri sendiri, dan kotak chat langsung dikosongkan. Jawaban memakai
+bahasa Indonesia, sedangkan nama perintahnya tetap bahasa Inggris. Kalau objek pesan game tidak
+tersedia, jawaban tampil sebagai toast. Teks yang diawali `/` tapi bukan perintah yang dikenal
+tetap terkirim sebagai chat biasa.
 
 Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain menyusul `#2`,
 `#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain
@@ -72,18 +74,20 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
 | `/kickall` | 1 | keluarkan semua pemain lain |
 | `/close` | 1 | tutup room dan keluar, tanpa konfirmasi |
-| `/shake` | 2 | getarkan kamera semua pemain |
-| `/explode <n>` | 2 | ledakan di posisi pemain nomor n |
-| `/boom <x> <y> [zone]` | 2 | ledakan di titik world x,y; zone default mengikuti tamu pertama |
-| `/status` | 3 | key sendiri, key host, status master, jumlah pemain |
-| `/log` | 3 | path file log sesi ini |
-| `/help <perintah>` | 3 | penjelasan satu perintah |
-| `/menu [1-3]` | 3 | daftar perintah per halaman |
+| `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 30 detik |
+| `/status` | 3 | key sendiri, key host, status host, jumlah pemain |
+| `/log` | 3 | lokasi file log sesi ini |
+| `/help <perintah\|-a>` | 3 | penjelasan satu perintah, atau semua dengan `-a` |
+| `/menu [1-3\|-a]` | 3 | daftar perintah per halaman, atau semua dengan `-a` |
 
 `/menu` tanpa angka menampilkan halaman 1: kontrol room di halaman 1, efek di halaman 2, dan
-utilitas di halaman 3. Paket kick, tutup room, getaran, dan ledakan dikirim memakai key host
-room, jadi klien lain menerimanya sebagai perintah dari host. Perintah hanya berlaku di room
-yang sedang dimasuki, dan tamu yang tidak punya izin host tetap bisa memakainya.
+utilitas di halaman 3; `/menu -a` mencetak ketiga halaman dan `/help -a` mencetak semua baris
+bantuan. `/shake <detik>` memakai kekuatan getar terbesar yang game pakai saat ledakan, diulang
+tiap 0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick,
+tutup room, dan getaran dikirim memakai key host room, jadi klien lain menerimanya sebagai
+perintah dari host; pemain lain ikut bergetar kalau kameranya dekat dengan posisi pemain yang
+mengetik perintah. Perintah hanya berlaku di room yang sedang dimasuki, dan tamu yang tidak
+punya izin host tetap bisa memakainya.
 
 ## Pemasangan
 
@@ -118,8 +122,8 @@ pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
   ditulis ke `Name.txt` di folder slot yang sama begitu profil pemain itu diterima game; kalau
   profilnya tidak pernah datang, slot tetap tersimpan tanpa nama.
 - Izin build dan destroy tetap ditentukan host room, jadi tamu tidak bisa mengubah tile di luar
-  izin itu. Yang dikirim mod hanya paket kick, tutup room, getaran, dan ledakan lewat perintah
-  chat, memakai key host room sebagai pengirim.
+  izin itu. Yang dikirim mod hanya paket kick, tutup room, dan getaran lewat perintah chat,
+  memakai key host room sebagai pengirim.
 - Batas ukuran world memakai preset terbesar game, yaitu 600x300. World sebesar itu tetap butuh
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.
