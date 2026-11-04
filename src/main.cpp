@@ -82,7 +82,7 @@ void* pekerja(void*) {
     pasangHookKotoran();
     pasangHookSkin();
     pasangHookSlot();
-    pasangHookKontrolPenuh();
+    pasangHookRoomKit();
     LOGI("Hook terpasang: %d", jumlahHookTerpasang());
     toastMasuk();
     return nullptr;

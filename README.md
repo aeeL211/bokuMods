@@ -59,11 +59,12 @@ Hanya `arm64-v8a`. Tidak ada komponen Java, Xposed, atau LSPosed.
 
 - Label versi di layar judul, halaman About, dan bantuan multiplayer diberi akhiran
   `(modded)`.
-- Perintah chat tingkat host: kick dan getar kamera.
+- RoomKit: perintah chat tingkat host untuk kick dan getar kamera.
 
-## Perintah chat
+## RoomKit
 
-Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
+RoomKit adalah kumpulan perintah chat room. Ketik perintah di kotak chat room, lalu kirim lewat
+tombol kirim atau aksi kirim di keyboard.
 Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat room perangkat
 sendiri, di sisi kiri seperti pesan yang diterima, dengan nama pemain sendiri sebagai pengirim,
 dan kotak chat langsung dikosongkan. Satu jawaban tampil dalam satu bubble, dan beberapa baris

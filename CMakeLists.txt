@@ -138,7 +138,7 @@ add_library(febrian SHARED
   src/hooks/feces.cpp
   src/hooks/skin.cpp
   src/hooks/slots.cpp
-  src/hooks/full_control.cpp
+  src/hooks/room_kit.cpp
 )
 
 target_include_directories(febrian PRIVATE src "${TARGETS_DIR}")

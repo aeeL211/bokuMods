@@ -19,7 +19,7 @@ void pasangHookTerpental();
 void pasangHookKotoran();
 void pasangHookTangan();
 void pasangHookSlot();
-void pasangHookKontrolPenuh();
+void pasangHookRoomKit();
 
 // Bernilai benar selama tombol interaksi ditahan untuk pemain ini.
 bool tombolAksiDitekan(void* manajer);

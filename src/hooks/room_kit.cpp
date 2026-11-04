@@ -899,7 +899,7 @@ void cariFieldLabelPesan() {
     cariField(kelasField(fieldLabelPesan), "mMaxLineCount", fieldMaksBarisLabel);
 }
 
-bool cariFieldKontrol() {
+bool cariFieldRoomKit() {
     if (!cariField(kelasDari("Net__Multi__Chat"), "a", fieldManajerChat))
         return false;
     if (!cariField(kelasDari("Net__Multi__Chat"), "_input_Field", fieldInputChat) ||
@@ -970,16 +970,16 @@ bool cariFieldKontrol() {
 
 } // namespace
 
-void pasangHookKontrolPenuh() {
-    siap = cariFieldKontrol() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
+void pasangHookRoomKit() {
+    siap = cariFieldRoomKit() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
            target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr &&
            target(T_GUEST_UPDATE).addr;
     if (!siap) {
-        LOGE("Field kontrol penuh tidak ditemukan; perintah chat tidak aktif");
+        LOGE("Field RoomKit tidak ditemukan; perintah chat tidak aktif");
         return;
     }
-    LOGI("Field kontrol penuh siap");
+    LOGI("Field RoomKit siap");
     pasangHook(target(T_CHAT_SEND), reinterpret_cast<void*>(hookKirim));
     pasangHook(target(T_INPUT_SEND), reinterpret_cast<void*>(hookTombolKirim));
     pasangHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(hookKunci));
