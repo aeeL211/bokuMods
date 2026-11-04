@@ -80,13 +80,14 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
 | `/status` | 3 | key sendiri, key host, status host, jumlah pemain |
 | `/log` | 3 | lokasi file log sesi ini |
-| `/help <perintah\|-a>` | 3 | penjelasan satu perintah, atau semua dengan `-a` |
-| `/menu [1-3\|-a]` | 3 | daftar perintah per halaman, atau semua dengan `-a` |
+| `/help [perintah]` | 3 | penjelasan satu perintah, atau semua tanpa argumen |
+| `/menu [1-3]` | 3 | daftar perintah per halaman, atau semua tanpa angka |
 
-`/menu` tanpa angka menampilkan halaman 1: kontrol room di halaman 1, efek di halaman 2, dan
-utilitas di halaman 3; `/menu -a` mencetak ketiga halaman dan `/help -a` mencetak semua baris
-bantuan. Satu halaman `/menu` menjadi satu bubble berisi beberapa baris, dan `/help -a`
-dipotong menjadi beberapa bubble pendek kalau barisnya terlalu banyak. `/shake <detik>` memakai
+`/menu` tanpa angka mencetak ketiga halaman: kontrol room di halaman 1, efek di halaman 2, dan
+utilitas di halaman 3, sedangkan `/menu 2` hanya halaman itu. `/help` tanpa argumen mencetak
+semua baris bantuan, dan `/help kick` hanya baris perintah itu. Satu halaman `/menu` menjadi satu
+bubble berisi beberapa baris, dan `/help` dipotong menjadi beberapa bubble pendek kalau barisnya
+terlalu banyak. `/shake <detik>` memakai
 kekuatan getar terbesar yang game pakai saat ledakan, diulang
 tiap 0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick,
 tutup room, dan getaran dikirim memakai key host room, jadi klien lain menerimanya sebagai

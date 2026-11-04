@@ -566,8 +566,8 @@ const Command commands[] = {
     {"kickall", 0, 0, 1, kickAllCommand, "/kickall - tendang semua tamu, host tetap"},
     {"close", 0, 0, 1, closeCommand, "/close - tutup room lalu keluar"},
     {"shake", 1, 1, 2, shakeCommand, "/shake <detik> - getarkan kamera paling kuat"},
-    {"menu", 0, 1, 3, menuCommand, "/menu [1-3|-a] - daftar perintah"},
-    {"help", 1, 1, 3, helpCommand, "/help <perintah|-a> - penjelasan perintah"},
+    {"menu", 0, 1, 3, menuCommand, "/menu [1-3] - daftar perintah"},
+    {"help", 0, 1, 3, helpCommand, "/help [perintah] - penjelasan perintah"},
     {"status", 0, 0, 3, statusCommand, "/status - detail koneksi"},
     {"log", 0, 0, 3, logCommand, "/log - lokasi file log sesi ini"},
 };
@@ -737,19 +737,15 @@ void logCommand(Session& s, int, char**) {
 
 void menuCommand(Session& s, int argc, char** argv) {
     int from = 1;
-    int to = 1;
+    int to = kPageCount;
     if (argc > 0) {
-        if (!strcmp(argv[0], "-a")) {
-            to = kPageCount;
-        } else {
-            int page = atoi(argv[0]);
-            if (page < 1 || page > kPageCount) {
-                reply(s, "Halaman menu 1 sampai 3, atau -a");
-                return;
-            }
-            from = page;
-            to = page;
+        int page = atoi(argv[0]);
+        if (page < 1 || page > kPageCount) {
+            reply(s, "Halaman menu 1 sampai 3");
+            return;
         }
+        from = page;
+        to = page;
     }
     char header[kLineSize];
     for (int page = from; page <= to; page++) {
@@ -765,8 +761,8 @@ void menuCommand(Session& s, int argc, char** argv) {
     }
 }
 
-void helpCommand(Session& s, int, char** argv) {
-    if (!strcmp(argv[0], "-a")) {
+void helpCommand(Session& s, int argc, char** argv) {
+    if (argc == 0) {
         Block block;
         blockReset(block);
         for (int i = 0; i < kCommandCount; i++)
