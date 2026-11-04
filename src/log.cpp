@@ -451,7 +451,7 @@ void bukaFileLog() {
     formatWaktu(waktu, sizeof(waktu), "%H:%M:%S");
     formatWaktu(tanggal, sizeof(tanggal), "%Y-%m-%d");
     char baris[640];
-    int n = snprintf(baris, sizeof(baris), "[%s] INFO  Log start (%s)\n", waktu, tanggal);
+    int n = snprintf(baris, sizeof(baris), "[%s] INFO  Log dimulai (%s)\n", waktu, tanggal);
     if (n > 0)
         write(fd, baris, static_cast<size_t>(n));
     // Direktorinya selalu Android/data/<package>/files, jadi path lengkap hanya
