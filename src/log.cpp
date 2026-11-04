@@ -41,6 +41,18 @@ constexpr int kPendingLen = 220;
 char pending[kPendingMax][kPendingLen] = {};
 std::atomic<int> pendingCount{0};
 
+// The worker, JNI_OnLoad and the constructor all log before the file exists, so
+// the pending ring needs its own lock. The signal handler never takes it: it
+// writes straight to logFd, which is already open by the time a crash matters.
+std::atomic_flag pendingLock = ATOMIC_FLAG_INIT;
+
+void lockPending() {
+    while (pendingLock.test_and_set(std::memory_order_acquire)) {
+    }
+}
+
+void unlockPending() { pendingLock.clear(std::memory_order_release); }
+
 void formatTime(char* out, size_t size, const char* pattern) {
     std::time_t now = std::time(nullptr);
     std::tm tm = {};
@@ -67,8 +79,13 @@ const char* signalName(int sig) {
 }
 
 void writeLine(const char* line, int n) {
+    // Re-check under the lock: the opener can install logFd between an earlier
+    // check and this store, and a line left behind after the final flush would
+    // never reach the file.
+    lockPending();
     int fd = logFd;
     if (fd >= 0) {
+        unlockPending();
         write(fd, line, static_cast<size_t>(n));
         return;
     }
@@ -77,9 +94,11 @@ void writeLine(const char* line, int n) {
     if (slot < 0)
         slot = 0;
     snprintf(pending[slot], kPendingLen, "%.*s", n, line);
+    unlockPending();
 }
 
 void flush() {
+    lockPending();
     int count = pendingCount.exchange(0);
     if (count > kPendingMax)
         count = kPendingMax;
@@ -88,6 +107,7 @@ void flush() {
         if (len)
             write(logFd, pending[i], len);
     }
+    unlockPending();
 }
 
 // getExternalFilesDir is the public API for the per-app external dir; calling it
