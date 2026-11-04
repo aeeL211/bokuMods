@@ -60,9 +60,12 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
 Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat room perangkat
 sendiri sebagai baris dari diri sendiri, dan kotak chat langsung dikosongkan. Jawaban memakai
-bahasa Indonesia, sedangkan nama perintahnya tetap bahasa Inggris. Kalau objek pesan game tidak
-tersedia, jawaban tampil sebagai toast. Teks yang diawali `/` tapi bukan perintah yang dikenal
-tetap terkirim sebagai chat biasa.
+bahasa Indonesia, sedangkan nama perintahnya tetap bahasa Inggris. Satu jawaban tampil dalam satu
+bubble, dan beberapa baris jawaban digabung ke dalam bubble itu dengan pemisah baris baru, jadi
+`/list`, `/status`, dan satu halaman `/menu` terbaca sebagai satu pesan, bukan tumpukan bubble
+satu baris. Jawaban yang terlalu panjang dipotong menjadi beberapa bubble pendek supaya tingginya
+tidak melebihi panel chat. Kalau objek pesan game tidak tersedia, jawaban tampil sebagai toast.
+Teks yang diawali `/` tapi bukan perintah yang dikenal tetap terkirim sebagai chat biasa.
 
 Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain menyusul `#2`,
 `#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain
@@ -82,7 +85,9 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 
 `/menu` tanpa angka menampilkan halaman 1: kontrol room di halaman 1, efek di halaman 2, dan
 utilitas di halaman 3; `/menu -a` mencetak ketiga halaman dan `/help -a` mencetak semua baris
-bantuan. `/shake <detik>` memakai kekuatan getar terbesar yang game pakai saat ledakan, diulang
+bantuan. Satu halaman `/menu` menjadi satu bubble berisi beberapa baris, dan `/help -a`
+dipotong menjadi beberapa bubble pendek kalau barisnya terlalu banyak. `/shake <detik>` memakai
+kekuatan getar terbesar yang game pakai saat ledakan, diulang
 tiap 0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick,
 tutup room, dan getaran dikirim memakai key host room, jadi klien lain menerimanya sebagai
 perintah dari host; pemain lain ikut bergetar kalau kameranya dekat dengan posisi pemain yang

@@ -50,6 +50,14 @@ Field inputText = {};
 Field chatMsg = {};
 Field msgSender = {};
 Field senderSelf = {};
+Field chatUi = {};
+Field chatMeasure = {};
+Field labelMaxLines = {};
+Field chatMsgs = {};
+Field msgItems = {};
+Field msgCount = {};
+Field msgObj = {};
+Field msgLabel = {};
 Field managerCamera = {};
 Field managerGuests = {};
 Field managerMulti = {};
@@ -70,6 +78,7 @@ Field physicsPos = {};
 Field posWorld = {};
 Field guestManagerA = {};
 bool ready = false;
+bool linesReady = false;
 
 // The timed shake keeps the start instant and the next send instant on a clock
 // the game cannot pause, so a slow frame does not stretch the requested time.
@@ -270,9 +279,29 @@ int collectPlayers(void* chat, void* mine, Slot* out) {
     return n;
 }
 
+// A bubble is a prefab instance, so it starts with the prefab's own line cap.
+// The bubble a multi-line answer just added is the last entry of the message
+// list, and lifting its cap keeps the text from being clipped to one line. A
+// missing list or a bubble that is not built yet leaves the cap alone.
+void liftMsgLabel(void* chat) {
+    if (!msgLabel.field)
+        return;
+    void* list = readPtr(chat, chatMsgs);
+    void* items = readPtr(list, msgItems);
+    int32_t count = readInt(list, msgCount);
+    int32_t capacity = arrayLength(items);
+    if (!items || count < 1 || count > capacity)
+        return;
+    void* msg = *reinterpret_cast<void**>(arrayData(items) + (count - 1) * sizeof(void*));
+    void* label = readPtr(readPtr(msg, msgObj), msgLabel);
+    writeInt(label, labelMaxLines, 0);
+}
+
 // The room chat draws a line only when its sender id equals _msg.sender.self,
-// and it labels a self line itself, so the body is the whole text. Without a
-// message object the answer falls back to a toast instead of going silent.
+// and it labels a self line itself, so the body is the whole text. The bubble is
+// one NGUI label, and NGUI breaks its text at every newline, so a body can hold
+// several lines. Without a message object the answer falls back to a toast
+// instead of going silent.
 void reply(Session& s, const char* text) {
     auto add = reinterpret_cast<AddTextFn>(target(T_CHAT_MSG_ADD).addr);
     if (!s.canReply || !add) {
@@ -286,6 +315,69 @@ void reply(Session& s, const char* text) {
         return;
     }
     add(s.chat, s.senderId, name, -1, 0, false, body, target(T_CHAT_MSG_ADD).method);
+    if (strchr(text, '\n'))
+        liftMsgLabel(s.chat);
+}
+
+// A command answer reads as one bubble while its lines are packed into one
+// label, so lines are joined with a newline here. The block is cut before it
+// outgrows the UTF-16 text buffer or turns into a bubble taller than the chat
+// panel, so a long answer becomes a few short bubbles instead of one tall one.
+struct Block {
+    char text[kLineSize];
+    size_t len;
+    int lines;
+};
+
+constexpr size_t kBlockChars = 228;
+constexpr int kBlockLines = 6;
+
+void blockReset(Block& block) {
+    block.text[0] = '\0';
+    block.len = 0;
+    block.lines = 0;
+}
+
+void blockFlush(Session& s, Block& block) {
+    if (block.lines)
+        reply(s, block.text);
+    blockReset(block);
+}
+
+void blockAdd(Session& s, Block& block, const char* line) {
+    size_t add = strlen(line);
+    if (add >= kBlockChars) {
+        blockFlush(s, block);
+        reply(s, line);
+        return;
+    }
+    size_t gap = block.lines ? 1 : 0;
+    if (block.lines >= kBlockLines || block.len + gap + add > kBlockChars)
+        blockFlush(s, block);
+    if (block.lines)
+        block.text[block.len++] = '\n';
+    memcpy(block.text + block.len, line, add);
+    block.len += add;
+    block.text[block.len] = '\0';
+    block.lines++;
+}
+
+// The bubble height comes from a template label that the game switches to
+// ResizeHeight before every measurement, and NGUI stops adding lines at that
+// label's maxLineCount. Lifting the cap once lets a multi-line block count every
+// line, so the bubble grows with the text instead of clipping it.
+void prepareChatLines(void* chat) {
+    if (linesReady || !chat)
+        return;
+    void* label = readPtr(readPtr(chat, chatUi), chatMeasure);
+    if (!label)
+        return;
+    linesReady = true;
+    int32_t cap = readInt(label, labelMaxLines);
+    if (cap == 0)
+        return;
+    writeInt(label, labelMaxLines, 0);
+    LOGI("Chat line cap lifted: %d", cap);
 }
 
 void* fieldText(void* chat) { return readPtr(readPtr(chat, chatInput), inputText); }
@@ -486,6 +578,8 @@ void listCommand(Session& s, int, char**) {
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
     void* host = hostKeyOf(s.multi);
+    Block block;
+    blockReset(block);
     char name[kNameSize];
     char line[kLineSize];
     for (int i = 0; i < n; i++) {
@@ -496,8 +590,9 @@ void listCommand(Session& s, int, char**) {
             bool isHost = sameText(readPtr(slots[i].guest, guestKey), host);
             snprintf(line, sizeof(line), "#%d %s%s", i + 1, name, isHost ? " (host)" : "");
         }
-        reply(s, line);
+        blockAdd(s, block, line);
     }
+    blockFlush(s, block);
 }
 
 void kickCommand(Session& s, int, char** argv) {
@@ -620,16 +715,19 @@ void statusCommand(Session& s, int, char**) {
     char own[kKeySize];
     char host[kKeySize];
     char line[kLineSize];
+    Block block;
+    blockReset(block);
     stringOf(s.key, own, sizeof(own), "?");
     stringOf(hostKey, host, sizeof(host), "?");
     snprintf(line, sizeof(line), "Key kamu: %s", own);
-    reply(s, line);
+    blockAdd(s, block, line);
     snprintf(line, sizeof(line), "Key host: %s", host);
-    reply(s, line);
-    reply(s, sameText(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
+    blockAdd(s, block, line);
+    blockAdd(s, block, sameText(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
     Slot slots[kMaxPlayers];
     snprintf(line, sizeof(line), "Pemain: %d", collectPlayers(s.chat, s.key, slots));
-    reply(s, line);
+    blockAdd(s, block, line);
+    blockFlush(s, block);
 }
 
 void logCommand(Session& s, int, char**) {
@@ -649,21 +747,27 @@ void menuCommand(Session& s, int argc, char** argv) {
         from = page;
         to = page;
     }
-    char header[32];
+    char header[kLineSize];
     for (int page = from; page <= to; page++) {
+        Block block;
+        blockReset(block);
         snprintf(header, sizeof(header), "KONTROL PENUH %d/%d", page, kPageCount);
-        reply(s, header);
+        blockAdd(s, block, header);
         for (int i = 0; i < kCommandCount; i++) {
             if (commands[i].page == page)
-                reply(s, commands[i].usage);
+                blockAdd(s, block, commands[i].usage);
         }
+        blockFlush(s, block);
     }
 }
 
 void helpCommand(Session& s, int, char** argv) {
     if (!strcmp(argv[0], "-a")) {
+        Block block;
+        blockReset(block);
         for (int i = 0; i < kCommandCount; i++)
-            reply(s, commands[i].usage);
+            blockAdd(s, block, commands[i].usage);
+        blockFlush(s, block);
         return;
     }
     for (int i = 0; i < kCommandCount; i++) {
@@ -718,6 +822,7 @@ bool handleCommand(void* chat, void* text) {
     char line[kLineSize];
     if (!ready || !commandText(text, line, sizeof(line)))
         return false;
+    prepareChatLines(chat);
     Session s;
     if (!openSession(chat, s)) {
         LOGE("Command session missing: no player or room");
@@ -760,6 +865,24 @@ void* keyHook(void* self, void* method) {
         return spoofKey;
     auto orig = reinterpret_cast<KeyFn>(target(T_PLAYER_KEY).orig);
     return orig ? orig(self, method) : nullptr;
+}
+
+// Resolves the fields of the bubble a reply lands in: the message list, the last
+// message and the label it owns. A missing field only leaves the prefab's line
+// cap in place, so the commands keep working.
+void resolveMsgLabel() {
+    if (!resolveField(classOf("Net__Multi__Chat"), "msgs", chatMsgs))
+        return;
+    void* listClass = fieldClass(chatMsgs);
+    if (!resolveField(listClass, "_items", msgItems) ||
+        !resolveField(listClass, "_size", msgCount))
+        return;
+    void* msgClass = fieldElementClass(msgItems);
+    if (!msgClass || !resolveField(msgClass, "c", msgObj))
+        return;
+    if (!resolveField(fieldClass(msgObj), "content__Text__Standard__Text__Label", msgLabel))
+        return;
+    resolveField(fieldClass(msgLabel), "mMaxLineCount", labelMaxLines);
 }
 
 bool resolveFields() {
@@ -817,6 +940,13 @@ bool resolveFields() {
     if (resolveField(classOf("Net__Multi__Chat"), "_msg", chatMsg) &&
         resolveField(fieldClass(chatMsg), "sender", msgSender))
         resolveField(fieldClass(msgSender), "self", senderSelf);
+
+    // The template label that measures every bubble, used to lift its line cap
+    // before the first multi-line answer. A missing field only leaves the cap.
+    if (resolveField(classOf("Net__Multi__Chat"), "ui", chatUi) &&
+        resolveField(classOf("UI__Manager"), "measure__Chat__Text__Label", chatMeasure))
+        resolveField(fieldClass(chatMeasure), "mMaxLineCount", labelMaxLines);
+    resolveMsgLabel();
     return true;
 }
 
