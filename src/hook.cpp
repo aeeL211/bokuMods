@@ -28,12 +28,19 @@ bool installHook(Target& t, void* replacement) {
         LOGE("Target not found: %s.%s", t.cls, t.name);
         return false;
     }
+    // Two files can name the same method, and ShadowHook only owns one hook per
+    // address in unique mode, so a target keeps its first stub and reports the
+    // repeat as installed instead of overwriting the trampoline the first file
+    // already calls through.
+    if (t.stub)
+        return true;
     void* stub = shadowhook_hook_func_addr(t.addr, replacement, &t.orig);
     if (!stub) {
         int e = shadowhook_get_errno();
         LOGE("Hook failed: %s.%s (error %d, %s)", t.cls, t.name, e, shadowhook_to_errmsg(e));
         return false;
     }
+    t.stub = stub;
     installedCount++;
     return true;
 }
