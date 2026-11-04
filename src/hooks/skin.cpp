@@ -96,9 +96,7 @@ bool pathSlot(void* model, int slot) {
                              sizeof(teksPath));
 }
 
-bool slotAda(void* model, int slot) {
-    return pathSlot(model, slot) && access(teksPath, F_OK) == 0;
-}
+bool slotAda(void* model, int slot) { return pathSlot(model, slot) && access(teksPath, F_OK) == 0; }
 
 void tulisSlot(void* model, int slot, void* text) {
     auto panggil =

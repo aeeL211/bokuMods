@@ -67,8 +67,8 @@ bool akarPenyimpananEksternal(char* out, size_t size) {
     bool berhasil = false;
     jclass kelasEnv = env->FindClass("android/os/Environment");
     if (kelasEnv) {
-        jmethodID metodeAkar = env->GetStaticMethodID(kelasEnv, "getExternalStorageDirectory",
-                                                      "()Ljava/io/File;");
+        jmethodID metodeAkar =
+            env->GetStaticMethodID(kelasEnv, "getExternalStorageDirectory", "()Ljava/io/File;");
         if (metodeAkar) {
             jobject akar = env->CallStaticObjectMethod(kelasEnv, metodeAkar);
             if (akar) {
@@ -76,9 +76,9 @@ bool akarPenyimpananEksternal(char* out, size_t size) {
                 jmethodID metodePath = kelasFile ? env->GetMethodID(kelasFile, "getAbsolutePath",
                                                                     "()Ljava/lang/String;")
                                                  : nullptr;
-                jstring path =
-                    metodePath ? static_cast<jstring>(env->CallObjectMethod(akar, metodePath))
-                               : nullptr;
+                jstring path = metodePath
+                                   ? static_cast<jstring>(env->CallObjectMethod(akar, metodePath))
+                                   : nullptr;
                 if (path) {
                     const char* karakter = env->GetStringUTFChars(path, nullptr);
                     if (karakter) {

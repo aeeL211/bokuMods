@@ -241,8 +241,8 @@ bool cariFieldSenjata() {
     void* manajerState = kelasDari("Player__State");
     return cariField(manajerState, "m", fieldManajerState) &&
            cariField(senjata, "m", fieldManajerSenjata) &&
-           cariField(senjata, "cmn", fieldSenjataCmn) &&
-           cariField(cmn, "m", fieldManajerCmn) && cariField(cmn, "chr_Hh", fieldCmnHh) &&
+           cariField(senjata, "cmn", fieldSenjataCmn) && cariField(cmn, "m", fieldManajerCmn) &&
+           cariField(cmn, "chr_Hh", fieldCmnHh) &&
            cariField(kelasField(fieldManajerSenjata), "__state", fieldState) &&
            cariField(kelasField(fieldState), "combo", fieldCombo) &&
            cariField(kelasField(fieldState), "_rockman__Rock_Buster", fieldRock) &&

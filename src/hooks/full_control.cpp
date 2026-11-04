@@ -210,9 +210,7 @@ void teksDari(void* teks, char* keluaran, size_t ukuran, const char* cadangan) {
     snprintf(keluaran, ukuran, "%s", cadangan);
 }
 
-void* namaAkunDari(void* tamu) {
-    return bacaPtr(bacaPtr(tamu, fieldAkunTamu), fieldNamaAkun);
-}
+void* namaAkunDari(void* tamu) { return bacaPtr(bacaPtr(tamu, fieldAkunTamu), fieldNamaAkun); }
 
 void* kunciSendiri(void* pemain) {
     auto kunci = reinterpret_cast<FnKunci>(target(T_PLAYER_KEY).orig);
@@ -305,8 +303,8 @@ void angkatLabelPesan(void* chat) {
 // teksnya pada setiap newline, jadi satu isi bisa memuat beberapa baris. Tanpa
 // objek pesan, jawaban jatuh ke toast daripada menjadi diam.
 int32_t pengirimJawaban(Sesi& sesi) {
-    int32_t lain = bacaInt(bacaPtr(bacaPtr(sesi.chat, fieldPesanChat), fieldPengirimPesan),
-                           fieldPengirimLain);
+    int32_t lain =
+        bacaInt(bacaPtr(bacaPtr(sesi.chat, fieldPesanChat), fieldPengirimPesan), fieldPengirimLain);
     return lain > 0 && lain != sesi.idPengirim ? lain : sesi.idPengirim;
 }
 
@@ -397,9 +395,7 @@ void siapkanBarisChat(void* chat) {
     LOGI("Batas baris chat dinaikkan: %d", batas);
 }
 
-void* teksInput(void* chat) {
-    return bacaPtr(bacaPtr(chat, fieldInputChat), fieldTeksInput);
-}
+void* teksInput(void* chat) { return bacaPtr(bacaPtr(chat, fieldInputChat), fieldTeksInput); }
 
 bool bukaSesi(void* chat, Sesi& sesi) {
     void* manajer = bacaPtr(chat, fieldManajerChat);
@@ -707,8 +703,8 @@ void perintahTendangSemua(Sesi& sesi, int, char**) {
 // menghapusnya dari daftar. Hanya host pemilik room, jadi tamu ditolak daripada
 // dilempar ke alur keluar host.
 bool bisaKeluarRoom() {
-    return fieldDisconnectMulti.field && fieldStateDisconnect.field &&
-           fieldHostDisconnect.field && target(T_DISCONNECT_INITIATIVE).addr;
+    return fieldDisconnectMulti.field && fieldStateDisconnect.field && fieldHostDisconnect.field &&
+           target(T_DISCONNECT_INITIATIVE).addr;
 }
 
 void mulaiKeluar(void* multi) {

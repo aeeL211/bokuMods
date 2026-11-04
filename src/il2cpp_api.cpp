@@ -331,7 +331,7 @@ bool ikatApi() {
         reinterpret_cast<decltype(api.fieldSetValue)>(dlsym(pustaka, "il2cpp_field_set_value"));
     api.stringChars =
         reinterpret_cast<decltype(api.stringChars)>(dlsym(pustaka, "il2cpp_string_chars"));
-    api.stringNewUtf16 = reinterpret_cast<decltype(api.stringNewUtf16)>(
-        dlsym(pustaka, "il2cpp_string_new_utf16"));
+    api.stringNewUtf16 =
+        reinterpret_cast<decltype(api.stringNewUtf16)>(dlsym(pustaka, "il2cpp_string_new_utf16"));
     return true;
 }

@@ -128,8 +128,8 @@ bool direktoriFile(char* out, size_t size) {
     const char* karakter = nullptr;
 
     if (kelasUnityPlayer()) {
-        jfieldID fieldAktivitas = env->GetStaticFieldID(kelasUnityPlayer(), "currentActivity",
-                                                        "Landroid/app/Activity;");
+        jfieldID fieldAktivitas =
+            env->GetStaticFieldID(kelasUnityPlayer(), "currentActivity", "Landroid/app/Activity;");
         if (fieldAktivitas)
             activity = env->GetStaticObjectField(kelasUnityPlayer(), fieldAktivitas);
     }

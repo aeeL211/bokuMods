@@ -46,8 +46,8 @@ bool integritasCocok() {
         return false;
     const auto* kepalaElf = static_cast<const Elf64_Ehdr*>(dasarPustaka);
     if (memcmp(kepalaElf->e_ident, ELFMAG, SELFMAG) != 0 ||
-        kepalaElf->e_ident[EI_CLASS] != ELFCLASS64 ||
-        kepalaElf->e_ident[EI_DATA] != ELFDATA2LSB || kepalaElf->e_machine != EM_AARCH64)
+        kepalaElf->e_ident[EI_CLASS] != ELFCLASS64 || kepalaElf->e_ident[EI_DATA] != ELFDATA2LSB ||
+        kepalaElf->e_machine != EM_AARCH64)
         return false;
 
     // Kepala ELF selalu ada di halaman pertama, jadi tabel program header di luarnya

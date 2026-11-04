@@ -30,8 +30,8 @@ bool versiAplikasi(char* nama, size_t size, jint& kode) {
     kode = 0;
 
     if (kelasUnityPlayer()) {
-        jfieldID fieldAktivitas = env->GetStaticFieldID(kelasUnityPlayer(), "currentActivity",
-                                                        "Landroid/app/Activity;");
+        jfieldID fieldAktivitas =
+            env->GetStaticFieldID(kelasUnityPlayer(), "currentActivity", "Landroid/app/Activity;");
         if (fieldAktivitas)
             activity = env->GetStaticObjectField(kelasUnityPlayer(), fieldAktivitas);
     }
@@ -61,8 +61,8 @@ bool versiAplikasi(char* nama, size_t size, jint& kode) {
     if (informasi) {
         kelasInformasi = env->GetObjectClass(informasi);
         if (kelasInformasi) {
-            jfieldID fieldNama = env->GetFieldID(kelasInformasi, "versionName",
-                                                 "Ljava/lang/String;");
+            jfieldID fieldNama =
+                env->GetFieldID(kelasInformasi, "versionName", "Ljava/lang/String;");
             jfieldID fieldKode = env->GetFieldID(kelasInformasi, "versionCode", "I");
             if (fieldNama)
                 versi = static_cast<jstring>(env->GetObjectField(informasi, fieldNama));

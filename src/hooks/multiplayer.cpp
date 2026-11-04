@@ -101,8 +101,7 @@ bool cariFieldUkuranDunia() {
         !cariField(kelasBatas, "_3", presetTeratas))
         return false;
     void* kelasPreset = kelasField(presetTeratas);
-    return cariField(kelasPreset, "w", lebarPreset) &&
-           cariField(kelasPreset, "h", tinggiPreset) &&
+    return cariField(kelasPreset, "w", lebarPreset) && cariField(kelasPreset, "h", tinggiPreset) &&
            cariField(kelasField(multiUkuranDunia), "max", batasMulti);
 }
 
