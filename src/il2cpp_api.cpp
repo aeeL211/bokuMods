@@ -54,6 +54,9 @@ SlotKelas daftarKelas[] = {
     {"Eff__Type__Tile", nullptr},
     {"Player__Manager", nullptr},
     {"Player__State__Std__Action__Hh__Nature", nullptr},
+    {"Net__Multi__Guest__Main__Console", nullptr},
+    {"Net__Multi__Guest__Menu", nullptr},
+    {"Input__Began__Net", nullptr},
 };
 
 // Di arm64, kepala array berisi klass, monitor, dan bounds (pointer) ditambah

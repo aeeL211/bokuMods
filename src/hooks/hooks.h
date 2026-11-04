@@ -20,6 +20,7 @@ void pasangHookKotoran();
 void pasangHookTangan();
 void pasangHookSlot();
 void pasangHookSpoof();
+void pasangHookTendang();
 void pasangHookRoomKit();
 
 // Paket yang hanya diterima host dikirim dengan kunci host milik room, dan

@@ -88,3 +88,15 @@ T_INPUT_SEND|Net__Multi__Chat|Input__Send|0|
 T_KICK_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Kick__Send|1|
 T_GUEST_UPDATE|Guest__Manager|_Update|0|
 T_HOST_KEY|Net__Multi|Host__Key|0|
+T_ORDER|MyBehaviour|Order|1|
+T_NEXT|MyBehaviour|Next|1|
+T_BUTTON_NEW|UI__Menu|Button__New|2|
+T_KICK_CONSOLE_INIT|Net__Multi__Guest__Main__Console|Init__Button|0|
+T_KICK_CONSOLE_ICON|Net__Multi__Guest__Main__Console|Init__Button__Icon|0|
+T_KICK_CONSOLE_TEXT|Net__Multi__Guest__Main__Console|Init__Button__Text|0|
+T_KICK_CONSOLE_YES|Net__Multi__Guest__Main__Console|Kick__Confirm__Yes|0|
+T_KICK_MENU_INIT|Net__Multi__Guest__Menu|Init__Button|0|
+T_KICK_MENU_ICON|Net__Multi__Guest__Menu|Init__Button__Icon|0|
+T_KICK_MENU_TEXT|Net__Multi__Guest__Menu|Init__Button__Text|0|
+T_KICK_MENU_YES|Net__Multi__Guest__Menu|Kick__Confirm__Yes|0|
+T_INPUT_TERM_MULTI|Input__Began__Net|Term__Multi|3|

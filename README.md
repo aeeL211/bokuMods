@@ -42,6 +42,9 @@ Hanya `arm64-v8a`. Tidak ada komponen Java, Xposed, atau LSPosed.
   Nama pemain asalnya ikut disimpan, sehingga skin siapa pun bisa dikenali.
 - Pesan pribadi antar pemain ikut tampil di chat room dengan awalan `[PM -> penerima]` dan
   dicatat di log. DM yang ditujukan ke akun sendiri tetap hanya tampil di jendela pribadi.
+- Tombol tendang milik host ikut muncul di panel tamu, jadi pemain mana pun bisa mengeluarkan
+  pemain lain tanpa menunggu host. Tombolnya bekerja seperti milik host: pilih pemain di daftar,
+  lalu tekan tendang.
 
 **Pertarungan dan barang**
 
@@ -118,7 +121,7 @@ dijalankan akan ada satu berkas baru, dan nomor paling besar adalah sesi terakhi
 
 Awal log mencatat versi game dan pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
 `Mod by Febrian/Ian (code aeeL), build 17467c3`, lalu `ShadowHook siap`,
-`Scan selesai: 90 dari 90 metode ditemukan`, dan `Hook terpasang: 74`. Baris `Berkas log:`
+`Scan selesai: 99 dari 99 metode ditemukan`, dan `Hook terpasang: 79`. Baris `Berkas log:`
 hanya menulis nama berkasnya, bukan path penuh.
 
 Kalau proses mati karena `SIGSEGV`, `SIGBUS`, `SIGILL`, atau `SIGABRT`, log menulis satu blok
@@ -133,8 +136,8 @@ itu yang dipakai untuk mencari penyebab, bukan logcat.
   atau library saat game berjalan, jadi sesi yang sudah aktif tidak bisa kehilangan hook di
   tengah permainan.
 - Izin build dan destroy tetap ditentukan host room, jadi tamu tidak bisa mengubah tile di luar
-  izin itu. Yang dikirim mod hanya paket kick lewat perintah chat, memakai kunci host
-  room sebagai pengirim.
+  izin itu. Yang dikirim mod hanya paket kick, memakai kunci host room sebagai pengirim, baik
+  lewat tombol tendang di panel tamu maupun lewat perintah chat.
 - Sushi, es krim, dan popsicle tetap habis seperti biasa, karena pose akhir makanannya mematikan
   layer tangan sehingga sisa item akan tidak terlihat. Makanan yang dimakan langsung dari piring
   tetap habis dalam satu gigitan seperti vanila.
