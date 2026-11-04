@@ -80,18 +80,21 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 
 | Perintah | Halaman | Fungsi |
 |---|---|---|
-| `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room; host tidak bisa ditendang |
 | `/kickall` | 1 | keluarkan semua tamu, host dan diri sendiri tetap di room |
-| `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
-| `/status` | 3 | kunci sendiri, kunci host, status host, jumlah pemain |
-| `/log` | 3 | lokasi berkas log sesi ini |
+| `/shake <detik>` | 1 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
+| `/list` | 2 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
+| `/status` | 2 | kunci sendiri, kunci host, status host, jumlah pemain |
+| `/log` | 2 | lokasi berkas log sesi ini |
+| `/menu [1-3]` | 3 | ringkasan semua halaman, atau satu halaman |
 | `/help [perintah]` | 3 | penjelasan satu perintah, atau semua tanpa argumen |
-| `/menu [1-3]` | 3 | daftar perintah per halaman, atau semua tanpa angka |
 
-`/menu` tanpa angka mencetak ketiga halaman: kontrol room di halaman 1, efek di halaman 2, dan
-utilitas di halaman 3, sedangkan `/menu 2` hanya halaman itu. `/help` tanpa argumen mencetak
-semua baris bantuan, dan `/help kick` hanya baris perintah itu.
+Halaman 1 berisi aksi room, halaman 2 berisi informasi, dan halaman 3 berisi bantuan. `/menu`
+tanpa angka mencetak ringkasan ketiganya dalam satu bubble: satu baris judul, lalu satu baris per
+halaman berisi nama perintahnya. `/menu 2` mencetak halaman itu saja dengan judul
+`RoomKit 2/3 - Info` dan penunjuk halaman berikutnya di baris terakhir; halaman 3 menunjuk ke
+`/help`. `/help` tanpa argumen mencetak semua baris bantuan, dan `/help kick` hanya baris
+perintah itu.
 
 `/shake <detik>` memakai kekuatan getar terbesar yang game pakai saat ledakan, diulang tiap
 0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick dan getaran
