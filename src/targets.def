@@ -57,7 +57,7 @@ T_INTRODUCE_SET|Net__Account__My_Account__Detail|Introduce__Set|1|
 T_GUEST_MSG_RECEIVE|Net__Multi__Guest__Chat|Msg__Receive__Text|3|
 T_CHAT_MSG_RECEIVE|Net__Multi__Chat|Msg__Receive__Text|2|
 T_CHAT_MSG_ADD|Net__Multi__Chat|Msg__Add__Text|6|
-T_ROOM_CLOSE|Net__Multi__Client|Room_Close|0|
+T_DISCONNECT_INITIATIVE|Net__Multi|Disconnect__Initiative|1|
 T_GUEST_REMOVE_SEND|Net__Multi__Transfer__Pipe|Host__Client__Guest__Remove__Send|1|
 T_PLAYER_KEY|Player__Manager|Key|0|
 T_SENSITIVE_WORD|UI__Note|Term__Sensitive_Word|3|

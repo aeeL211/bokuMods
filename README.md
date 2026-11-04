@@ -73,7 +73,7 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
 | `/kickall` | 1 | keluarkan semua pemain lain |
-| `/close` | 1 | tutup room dan keluar, tanpa konfirmasi |
+| `/close` | 1 | tutup room lalu keluar; hanya host, tanpa konfirmasi |
 | `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 30 detik |
 | `/status` | 3 | key sendiri, key host, status host, jumlah pemain |
 | `/log` | 3 | lokasi file log sesi ini |
@@ -86,8 +86,11 @@ bantuan. `/shake <detik>` memakai kekuatan getar terbesar yang game pakai saat l
 tiap 0,2 detik selama jangka waktu itu, dan berhenti tepat saat waktunya habis. Paket kick,
 tutup room, dan getaran dikirim memakai key host room, jadi klien lain menerimanya sebagai
 perintah dari host; pemain lain ikut bergetar kalau kameranya dekat dengan posisi pemain yang
-mengetik perintah. Perintah hanya berlaku di room yang sedang dimasuki, dan tamu yang tidak
-punya izin host tetap bisa memakainya.
+mengetik perintah. `/close` hanya untuk host: paket tutup room dikirim ke semua tamu, lalu
+perangkat host menjalankan alur keluar yang sama dengan tombol tutup room bawaan game, jadi room
+benar-benar kosong dan hilang dari daftar. Tamu yang mengetik `/close` dijawab
+`Hanya host yang bisa menutup room` dan tidak ada paket yang dikirim. Perintah lain hanya berlaku
+di room yang sedang dimasuki, dan tamu tetap bisa memakai `/kick`, `/kickall`, dan `/shake`.
 
 ## Pemasangan
 

@@ -24,7 +24,7 @@ using ShakeSendFn = void (*)(void*, float, float, void*);
 using ShakeFn = void (*)(void*, int32_t, float, void*);
 using AddTextFn = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
 using RemoveSendFn = void (*)(void*, void*, void*);
-using LocalCloseFn = void (*)(void*, void*);
+using LeaveFn = void (*)(void*, int32_t, void*);
 
 constexpr int kMaxPlayers = 16;
 constexpr int kMaxTokens = 8;
@@ -60,7 +60,9 @@ Field playerPhy = {};
 Field multiTransfer = {};
 Field transferPipe = {};
 Field transferHost = {};
-Field multiClient = {};
+Field multiDisconnect = {};
+Field disconnectState = {};
+Field disconnectHost = {};
 Field physicsPos = {};
 Field posWorld = {};
 Field guestManagerA = {};
@@ -422,28 +424,45 @@ void kickAllCommand(Session& s, int, char**) {
     reply(s, line);
 }
 
-// The packet makes every guest show the room-closed notice, and the local client
-// call starts the game's own leave flow on this device, so the host is not left
-// standing in a room nobody can rejoin.
+// The stock host close sends the packet and then starts the same timed leave the
+// menu button uses, which is what actually empties the room and removes it from
+// the list. Only the host owns the room, so a guest is refused instead of being
+// dropped into the host leave flow.
+bool canLeaveRoom() {
+    return multiDisconnect.field && disconnectState.field && disconnectHost.field &&
+           target(T_DISCONNECT_INITIATIVE).addr;
+}
+
+void startLeave(void* multi) {
+    auto leave = reinterpret_cast<LeaveFn>(target(T_DISCONNECT_INITIATIVE).addr);
+    void* state = readPtr(readPtr(multi, multiDisconnect), disconnectState);
+    if (!leave || !state) {
+        LOGE("Close: leave state missing");
+        return;
+    }
+    leave(multi, readInt(state, disconnectHost), target(T_DISCONNECT_INITIATIVE).method);
+}
+
 void closeCommand(Session& s, int, char**) {
+    if (!sameText(s.key, hostKeyOf(s.multi))) {
+        reply(s, "Hanya host yang bisa menutup room");
+        return;
+    }
     void* pipe = pipeOf(s.multi);
     auto send = reinterpret_cast<EmptySendFn>(target(T_ROOM_CLOSE_SEND).addr);
-    auto close = reinterpret_cast<LocalCloseFn>(target(T_ROOM_CLOSE).addr);
-    void* client = readPtr(s.multi, multiClient);
     bool canSend = pipe && send;
-    bool canLeave = close && client;
-    if (!canSend && !canLeave) {
+    if (!canSend && !canLeaveRoom()) {
         reply(s, "Tutup room tidak tersedia");
         return;
     }
+    reply(s, canSend ? "Room ditutup" : "Kamu keluar dari room");
     if (canSend) {
         startSpoof(s.multi);
         send(pipe, target(T_ROOM_CLOSE_SEND).method);
         stopSpoof();
     }
-    reply(s, canSend ? "Room ditutup" : "Room ditutup di perangkat ini saja");
-    if (canLeave)
-        close(client, target(T_ROOM_CLOSE).method);
+    if (canLeaveRoom())
+        startLeave(s.multi);
 }
 
 // The seconds are capped so a typo cannot hammer every client with packets; the
@@ -659,7 +678,10 @@ bool resolveFields() {
 
     // Replies and the local half of /close degrade on their own: a missing field
     // sends the answer to a toast and skips the local leave, never the commands.
-    resolveField(fieldClass(managerMulti), "client", multiClient);
+    if (!resolveField(fieldClass(managerMulti), "_disconnect", multiDisconnect) ||
+        !resolveField(fieldClass(multiDisconnect), "_state", disconnectState) ||
+        !resolveField(fieldClass(disconnectState), "host", disconnectHost))
+        LOGE("Close fields missing; /close skips the leave");
     if (resolveField(classOf("Net__Multi__Chat"), "_msg", chatMsg) &&
         resolveField(fieldClass(chatMsg), "sender", msgSender))
         resolveField(fieldClass(msgSender), "self", senderSelf);
