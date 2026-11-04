@@ -21,7 +21,9 @@ using EmptySendFn = void (*)(void*, void*);
 using ClearFn = void (*)(void*, void*);
 using ExplosionFn = void (*)(void*, int32_t, float, float, int32_t, void*);
 using ShakeSendFn = void (*)(void*, float, float, void*);
-using RoomChatFn = void (*)(void*, void*, void*, void*);
+using AddTextFn = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
+using RemoveSendFn = void (*)(void*, void*, void*);
+using LocalCloseFn = void (*)(void*, void*);
 
 constexpr int kMaxPlayers = 16;
 constexpr int kMaxTokens = 8;
@@ -33,6 +35,9 @@ constexpr int32_t kExplosionStep = 1;
 Field chatManager = {};
 Field chatInput = {};
 Field inputText = {};
+Field chatMsg = {};
+Field msgSender = {};
+Field senderSelf = {};
 Field managerCamera = {};
 Field managerGuests = {};
 Field managerMulti = {};
@@ -48,6 +53,7 @@ Field playerPhy = {};
 Field multiTransfer = {};
 Field transferPipe = {};
 Field transferHost = {};
+Field multiClient = {};
 Field physicsPos = {};
 Field posWorld = {};
 bool ready = false;
@@ -67,8 +73,8 @@ struct Session {
     void* multi;
     void* player;
     void* key;
-    void* sender;
-    bool alone;
+    int32_t senderId;
+    bool canReply;
 };
 
 void readPoint(void* obj, const Field& f, float& x, float& y) {
@@ -173,37 +179,22 @@ int collectPlayers(void* chat, void* mine, Slot* out) {
     return n;
 }
 
-// The room chat only draws a sender it can find in the guest list, so the local
-// key is used when it is listed and the first guest key otherwise.
-void* displayKey(void* chat, void* mine) {
-    Slot slots[kMaxPlayers];
-    int n = collectPlayers(chat, nullptr, slots);
-    void* first = nullptr;
-    for (int i = 1; i < n; i++) {
-        if (!slots[i].guest)
-            continue;
-        void* key = readPtr(slots[i].guest, guestKey);
-        if (!first)
-            first = key;
-        if (sameText(key, mine))
-            return key;
-    }
-    return first ? first : mine;
-}
-
-// The room chat labels the sender itself, so the body is the whole line. A room
-// with no other player has no guest row the line can belong to and the game
-// drops it, so the answer goes to a toast there instead.
+// The room chat draws a line only when its sender id equals _msg.sender.self,
+// and it labels a self line itself, so the body is the whole text. Without a
+// message object the answer falls back to a toast instead of going silent.
 void reply(Session& s, const char* text) {
-    if (s.alone) {
+    auto add = reinterpret_cast<AddTextFn>(target(T_CHAT_MSG_ADD).addr);
+    if (!s.canReply || !add) {
         toast(text);
         return;
     }
-    auto roomChat = reinterpret_cast<RoomChatFn>(target(T_CHAT_MSG_RECEIVE).addr);
     void* body = utf16Of(text);
-    if (!roomChat || !s.sender || !body)
+    void* name = s.key ? s.key : utf16Of("");
+    if (!body || !name) {
+        toast(text);
         return;
-    roomChat(s.chat, s.sender, body, target(T_CHAT_MSG_RECEIVE).method);
+    }
+    add(s.chat, s.senderId, name, -1, 0, false, body, target(T_CHAT_MSG_ADD).method);
 }
 
 void* fieldText(void* chat) { return readPtr(readPtr(chat, chatInput), inputText); }
@@ -216,23 +207,28 @@ bool openSession(void* chat, Session& s) {
     if (!s.player || !s.multi)
         return false;
     s.key = ownKey(s.player);
-    s.sender = displayKey(chat, s.key);
-    Slot slots[kMaxPlayers];
-    s.alone = collectPlayers(chat, s.key, slots) <= 1;
+    void* msg = readPtr(chat, chatMsg);
+    s.canReply = msg && msgSender.field && senderSelf.field && target(T_CHAT_MSG_ADD).addr;
+    s.senderId = s.canReply ? readInt(msg, senderSelf) : 0;
     return true;
 }
 
-void kickSlot(Session& s, const Slot& slot) {
-    if (!slot.guest)
-        return;
-    void* key = readPtr(slot.guest, guestKey);
+// The stock kick button sends two packets: the kick makes the guest show the
+// notice, and the guest remove takes it off every list. Both carry the sender
+// key, so the same override makes a client accept them as host packets.
+bool kickSlot(Session& s, const Slot& slot) {
+    void* key = slot.guest ? readPtr(slot.guest, guestKey) : nullptr;
     void* pipe = pipeOf(s.multi);
     auto kick = reinterpret_cast<KickFn>(target(T_KICK_SEND).addr);
+    auto remove = reinterpret_cast<RemoveSendFn>(target(T_GUEST_REMOVE_SEND).addr);
     if (!key || !pipe || !kick)
-        return;
+        return false;
     startSpoof(s.multi);
     kick(pipe, key, target(T_KICK_SEND).method);
+    if (remove)
+        remove(pipe, key, target(T_GUEST_REMOVE_SEND).method);
     stopSpoof();
+    return true;
 }
 
 void explodeAt(Session& s, int32_t zone, float x, float y) {
@@ -341,7 +337,10 @@ void kickCommand(Session& s, int, char** argv) {
         reply(s, "You cannot kick yourself");
         return;
     }
-    kickSlot(s, slots[index - 1]);
+    if (!kickSlot(s, slots[index - 1])) {
+        reply(s, "Kick failed");
+        return;
+    }
     reply(s, "Kick sent");
 }
 
@@ -349,26 +348,43 @@ void kickAllCommand(Session& s, int, char**) {
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
     int sent = 0;
-    char line[64];
     for (int i = 1; i < n; i++) {
-        kickSlot(s, slots[i]);
-        sent++;
+        if (kickSlot(s, slots[i]))
+            sent++;
+        else
+            LOGE("Kick skipped: guest has no key or pipe");
+    }
+    char line[kLineSize];
+    if (sent == 0) {
+        reply(s, "No player to kick");
+        return;
     }
     snprintf(line, sizeof(line), "Kick sent to %d player(s)", sent);
     reply(s, line);
 }
 
+// The packet makes every guest show the room-closed notice, and the local client
+// call starts the game's own leave flow on this device, so the host is not left
+// standing in a room nobody can rejoin.
 void closeCommand(Session& s, int, char**) {
     void* pipe = pipeOf(s.multi);
-    auto close = reinterpret_cast<EmptySendFn>(target(T_ROOM_CLOSE_SEND).addr);
-    if (!pipe || !close) {
+    auto send = reinterpret_cast<EmptySendFn>(target(T_ROOM_CLOSE_SEND).addr);
+    auto close = reinterpret_cast<LocalCloseFn>(target(T_ROOM_CLOSE).addr);
+    void* client = readPtr(s.multi, multiClient);
+    bool canSend = pipe && send;
+    bool canLeave = close && client;
+    if (!canSend && !canLeave) {
         reply(s, "Room close unavailable");
         return;
     }
-    startSpoof(s.multi);
-    close(pipe, target(T_ROOM_CLOSE_SEND).method);
-    stopSpoof();
-    reply(s, "Room closed");
+    if (canSend) {
+        startSpoof(s.multi);
+        send(pipe, target(T_ROOM_CLOSE_SEND).method);
+        stopSpoof();
+    }
+    reply(s, canSend ? "Room closed" : "Room closed on this device only");
+    if (canLeave)
+        close(client, target(T_ROOM_CLOSE).method);
 }
 
 void shakeCommand(Session& s, int, char**) {
@@ -595,17 +611,26 @@ bool resolveFields() {
     if (!resolveField(fieldClass(managerMulti), "transfer", multiTransfer))
         return false;
     void* transferClass = fieldClass(multiTransfer);
-    return resolveField(transferClass, "pipe", transferPipe) &&
-           resolveField(transferClass, "host", transferHost);
+    if (!resolveField(transferClass, "pipe", transferPipe) ||
+        !resolveField(transferClass, "host", transferHost))
+        return false;
+
+    // Replies and the local half of /close degrade on their own: a missing field
+    // sends the answer to a toast and skips the local leave, never the commands.
+    resolveField(fieldClass(managerMulti), "client", multiClient);
+    if (resolveField(classOf("Net__Multi__Chat"), "_msg", chatMsg) &&
+        resolveField(fieldClass(chatMsg), "sender", msgSender))
+        resolveField(fieldClass(msgSender), "self", senderSelf);
+    return true;
 }
 
 } // namespace
 
 void installFullControlHooks() {
     ready = resolveFields() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
-            target(T_INPUT_SEND).addr && target(T_CHAT_MSG_RECEIVE).addr &&
-            target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
-            target(T_ROOM_CLOSE_SEND).addr && target(T_EXPLOSION_PLAYER_SEND).addr &&
+            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr &&
+            target(T_KICK_SEND).addr && target(T_ROOM_CLOSE_SEND).addr &&
+            target(T_EXPLOSION_PLAYER_SEND).addr &&
             target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr;
     if (!ready) {
         LOGE("Full control fields missing; chat commands stay off");

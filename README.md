@@ -57,10 +57,10 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 ## Perintah chat
 
 Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
-Baris perintah tidak pernah sampai ke pemain lain: jawabannya hanya muncul di chat room perangkat
-sendiri, dan kotak chat langsung dikosongkan. Kalau room belum berisi pemain lain, jawaban tampil
-sebagai toast karena chat room tidak punya baris pengirim untuk ditempeli. Teks yang diawali `/`
-tapi bukan perintah yang dikenal tetap terkirim sebagai chat biasa.
+Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat room perangkat
+sendiri sebagai baris dari diri sendiri, dan kotak chat langsung dikosongkan. Kalau objek pesan
+game tidak tersedia, jawaban tampil sebagai toast. Teks yang diawali `/` tapi bukan perintah
+yang dikenal tetap terkirim sebagai chat biasa.
 
 Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain menyusul `#2`,
 `#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain
@@ -71,7 +71,7 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
 | `/kickall` | 1 | keluarkan semua pemain lain |
-| `/close` | 1 | tutup room, tanpa konfirmasi |
+| `/close` | 1 | tutup room dan keluar, tanpa konfirmasi |
 | `/shake` | 2 | getarkan kamera semua pemain |
 | `/explode <n>` | 2 | ledakan di posisi pemain nomor n |
 | `/boom <x> <y> [zone]` | 2 | ledakan di titik world x,y; zone default mengikuti tamu pertama |
