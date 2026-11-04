@@ -80,12 +80,6 @@ struct TendangSemua {
 
 TendangSemua tendangSemua = {};
 
-// Paket khusus host lolos di penerima karena payload-nya membawa kunci pengirim,
-// dan penerima hanya membandingkan string itu. Penggantian ini hidup di thread
-// pengirim dan dibersihkan begitu paketnya pergi.
-thread_local bool spoofAktif = false;
-thread_local void* kunciSpoof = nullptr;
-
 struct Slot {
     void* tamu;
 };
@@ -175,23 +169,6 @@ void* kunciSendiri(void* pemain) {
     if (!pemain || !kunci)
         return nullptr;
     return kunci(pemain, target(T_PLAYER_KEY).method);
-}
-
-void* kunciHostDari(void* multi) {
-    auto kunci = reinterpret_cast<FnKunci>(target(T_HOST_KEY).addr);
-    if (!multi || !kunci)
-        return nullptr;
-    return kunci(multi, target(T_HOST_KEY).method);
-}
-
-void mulaiSpoof(void* multi) {
-    kunciSpoof = kunciHostDari(multi);
-    spoofAktif = kunciSpoof != nullptr;
-}
-
-void hentiSpoof() {
-    spoofAktif = false;
-    kunciSpoof = nullptr;
 }
 
 void* pipeDari(void* multi) {
@@ -765,13 +742,6 @@ void hookTombolKirim(void* sendiri, void* metode) {
         asli(sendiri, metode);
 }
 
-void* hookKunci(void* sendiri, void* metode) {
-    if (spoofAktif && kunciSpoof)
-        return kunciSpoof;
-    auto asli = reinterpret_cast<FnKunci>(target(T_PLAYER_KEY).orig);
-    return asli ? asli(sendiri, metode) : nullptr;
-}
-
 // Mencari field bubble tempat jawaban mendarat: daftar pesan, pesan terakhir,
 // dan label miliknya. Field yang tidak ada hanya membiarkan batas baris prefab
 // apa adanya, jadi perintahnya tetap berjalan.
@@ -861,6 +831,5 @@ void pasangHookRoomKit() {
     LOGI("Field RoomKit siap");
     pasangHook(target(T_CHAT_SEND), reinterpret_cast<void*>(hookKirim));
     pasangHook(target(T_INPUT_SEND), reinterpret_cast<void*>(hookTombolKirim));
-    pasangHook(target(T_PLAYER_KEY), reinterpret_cast<void*>(hookKunci));
     pasangHook(target(T_GUEST_UPDATE), reinterpret_cast<void*>(hookUpdate));
 }

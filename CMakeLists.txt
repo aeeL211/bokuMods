@@ -138,6 +138,7 @@ add_library(febrian SHARED
   src/hooks/feces.cpp
   src/hooks/skin.cpp
   src/hooks/slots.cpp
+  src/hooks/spoof.cpp
   src/hooks/room_kit.cpp
 )
 

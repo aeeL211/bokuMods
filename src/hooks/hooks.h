@@ -19,7 +19,14 @@ void pasangHookTerpental();
 void pasangHookKotoran();
 void pasangHookTangan();
 void pasangHookSlot();
+void pasangHookSpoof();
 void pasangHookRoomKit();
+
+// Paket yang hanya diterima host dikirim dengan kunci host milik room, dan
+// penggantiannya hanya hidup selama satu panggilan kirim.
+void mulaiSpoof(void* multi);
+void hentiSpoof();
+void* kunciHostDari(void* multi);
 
 // Bernilai benar selama tombol interaksi ditahan untuk pemain ini.
 bool tombolAksiDitekan(void* manajer);
