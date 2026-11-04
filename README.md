@@ -71,8 +71,8 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | Perintah | Halaman | Fungsi |
 |---|---|---|
 | `/list` | 3 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
-| `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
-| `/kickall` | 1 | keluarkan semua pemain lain |
+| `/kick <n>` | 1 | keluarkan pemain nomor n dari room; host tidak bisa ditendang |
+| `/kickall` | 1 | keluarkan semua tamu, host dan diri sendiri tetap di room |
 | `/close` | 1 | tutup room lalu keluar; hanya host, tanpa konfirmasi |
 | `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
 | `/status` | 3 | key sendiri, key host, status host, jumlah pemain |
@@ -91,6 +91,8 @@ perangkat host menjalankan alur keluar yang sama dengan tombol tutup room bawaan
 benar-benar kosong dan hilang dari daftar. Tamu yang mengetik `/close` dijawab
 `Hanya host yang bisa menutup room` dan tidak ada paket yang dikirim. Perintah lain hanya berlaku
 di room yang sedang dimasuki, dan tamu tetap bisa memakai `/kick`, `/kickall`, dan `/shake`.
+`/kickall` menendang semua tamu kecuali host, jadi room tetap hidup dan hanya tersisa host dan
+diri sendiri; `/kick` yang menyasar nomor host dijawab `Host tidak bisa ditendang`.
 
 ## Pemasangan
 

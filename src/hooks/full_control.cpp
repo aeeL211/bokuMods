@@ -357,7 +357,7 @@ void logCommand(Session&, int, char**);
 const Command commands[] = {
     {"list", 0, 0, 3, listCommand, "/list - daftar pemain dan nomornya"},
     {"kick", 1, 1, 1, kickCommand, "/kick <n> - tendang pemain nomor n"},
-    {"kickall", 0, 0, 1, kickAllCommand, "/kickall - tendang semua pemain lain"},
+    {"kickall", 0, 0, 1, kickAllCommand, "/kickall - tendang semua tamu, host tetap"},
     {"close", 0, 0, 1, closeCommand, "/close - tutup room lalu keluar"},
     {"shake", 1, 1, 2, shakeCommand, "/shake <detik> - getarkan kamera paling kuat"},
     {"menu", 0, 1, 3, menuCommand, "/menu [1-3|-a] - daftar perintah"},
@@ -398,6 +398,10 @@ void kickCommand(Session& s, int, char** argv) {
         reply(s, "Tidak bisa menendang diri sendiri");
         return;
     }
+    if (sameText(readPtr(slots[index - 1].guest, guestKey), hostKeyOf(s.multi))) {
+        reply(s, "Host tidak bisa ditendang");
+        return;
+    }
     if (!kickSlot(s, slots[index - 1])) {
         reply(s, "Tendangan gagal");
         return;
@@ -405,11 +409,19 @@ void kickCommand(Session& s, int, char** argv) {
     reply(s, "Tendangan terkirim");
 }
 
+// The host is listed as an ordinary guest, and kicking it ends the room before
+// the rest of the list is reached, so that slot is skipped and every other
+// guest is kicked, leaving this player and the host alone.
 void kickAllCommand(Session& s, int, char**) {
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
+    void* host = hostKeyOf(s.multi);
     int sent = 0;
     for (int i = 1; i < n; i++) {
+        if (sameText(readPtr(slots[i].guest, guestKey), host)) {
+            LOGI("Kick skipped: host");
+            continue;
+        }
         if (kickSlot(s, slots[i]))
             sent++;
         else
