@@ -483,9 +483,9 @@ void kickAllTick(void* self) {
 // The camera hook drops both stock entry points, so the local half of a shake
 // goes through the original of the two-argument call.
 void applyShake(void* camera, int32_t rounds, float offset) {
-    auto shake = reinterpret_cast<ShakeFn>(target(T_SHAKE_NUM).orig);
-    if (shake && camera)
-        shake(camera, rounds, offset, target(T_SHAKE_NUM).method);
+    auto shakeFn = reinterpret_cast<ShakeFn>(target(T_SHAKE_NUM).orig);
+    if (shakeFn && camera)
+        shakeFn(camera, rounds, offset, target(T_SHAKE_NUM).method);
 }
 
 // One shake round at the game's top strength: the local camera is shaken here,
