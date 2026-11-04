@@ -26,7 +26,7 @@ void rebuildHand(void* self) {
     auto hh = reinterpret_cast<void (*)(void*, int32_t, void*)>(target(T_HH_CHANGE).orig);
     if (!hh)
         return;
-    hh(self, handId, nullptr);
+    hh(self, handId, target(T_HH_CHANGE).method);
     if (refreshLogsLeft > 0) {
         refreshLogsLeft--;
         LOGI("Hand refreshed: id=%d", handId);

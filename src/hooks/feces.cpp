@@ -91,11 +91,12 @@ void clearCharge(void* manager) {
 }
 
 // The standalone throw calls a single entry that takes the power, so the same
-// entry is reused for the repeat.
+// entry is reused for the repeat. The hidden method info is the one the scan
+// stored for that entry, because a body that reads it must not see a null.
 void throwNow(void* self, bool up) {
-    void* entry = target(up ? T_FECES_ACTION_UP : T_FECES_ACTION_STD).addr;
-    if (entry)
-        reinterpret_cast<void (*)(void*, float, void*)>(entry)(self, kFullPower, nullptr);
+    Target& entry = target(up ? T_FECES_ACTION_UP : T_FECES_ACTION_STD);
+    if (entry.addr)
+        reinterpret_cast<void (*)(void*, float, void*)>(entry.addr)(self, kFullPower, entry.method);
 }
 
 // The straight charge is entered from every aim, and the look-up one replaces it

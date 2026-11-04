@@ -210,7 +210,7 @@ void busterEndUpdateHook(void* self, void* method) {
     if (!cadenceReady(cadence.busterShotMs, kBusterCadenceMs))
         return;
 
-    action(self, endDir(cmn, nullptr), nullptr);
+    action(self, endDir(cmn, target(T_ROCK_END_DIR).method), target(T_ROCK_ACTION).method);
 }
 
 // The id lookup returns the charged projectile only when the runtime charge
