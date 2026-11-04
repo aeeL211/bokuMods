@@ -54,6 +54,8 @@ void showToast(JNIEnv* env, const char* text) {
         env->DeleteLocalRef(message);
     if (activity)
         env->DeleteLocalRef(activity);
+    if (toastClass)
+        env->DeleteLocalRef(toastClass);
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         LOGE("Toast failed: %s", text);
@@ -68,6 +70,8 @@ bool hasLooper(JNIEnv* env) {
     jobject looper = my ? env->CallStaticObjectMethod(looperClass, my) : nullptr;
     if (looper)
         env->DeleteLocalRef(looper);
+    if (looperClass)
+        env->DeleteLocalRef(looperClass);
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         return false;

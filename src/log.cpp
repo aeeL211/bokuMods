@@ -110,10 +110,15 @@ bool filesDir(char* out, size_t size) {
             activity = env->GetStaticObjectField(unityPlayer(), current);
     }
     if (activity) {
-        jmethodID getDir = env->GetMethodID(env->GetObjectClass(activity), "getExternalFilesDir",
-                                            "(Ljava/lang/String;)Ljava/io/File;");
+        jclass activityClass = env->GetObjectClass(activity);
+        jmethodID getDir =
+            activityClass ? env->GetMethodID(activityClass, "getExternalFilesDir",
+                                             "(Ljava/lang/String;)Ljava/io/File;")
+                          : nullptr;
         if (getDir)
             dir = env->CallObjectMethod(activity, getDir, nullptr);
+        if (activityClass)
+            env->DeleteLocalRef(activityClass);
     }
     if (dir) {
         jclass fileClass = env->FindClass("java/io/File");
@@ -122,6 +127,7 @@ bool filesDir(char* out, size_t size) {
                 env->GetMethodID(fileClass, "getAbsolutePath", "()Ljava/lang/String;");
             if (getPath)
                 path = static_cast<jstring>(env->CallObjectMethod(dir, getPath));
+            env->DeleteLocalRef(fileClass);
         }
     }
     if (path) {
@@ -302,9 +308,9 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
     formatTime(clock, sizeof(clock), "%H:%M:%S");
     char line[512];
     int n = snprintf(line, sizeof(line),
-                     "[%s] ERROR CRASH signal=%s pc=0x%lx module=%s+0x%lx fault=0x%lx lr=0x%lx "
-                     "x19=0x%lx x20=0x%lx\n",
-                     clock, signalName(sig), static_cast<unsigned long>(pc), name,
+                     "[%s] ERROR CRASH signal=%s code=%d pc=0x%lx module=%s+0x%lx "
+                     "fault=0x%lx lr=0x%lx x19=0x%lx x20=0x%lx\n",
+                     clock, signalName(sig), info->si_code, static_cast<unsigned long>(pc), name,
                      static_cast<unsigned long>(offset), static_cast<unsigned long>(fault),
                      static_cast<unsigned long>(lr),
                      static_cast<unsigned long>(uc->uc_mcontext.regs[19]),
@@ -317,7 +323,7 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
     // and stale stack data stay out of the log.
     uintptr_t sp = static_cast<uintptr_t>(uc->uc_mcontext.sp);
     int shown = 0;
-    for (int i = 0; i < 192 && shown < 10; i++) {
+    for (int i = 0; i < 512 && shown < 16; i++) {
         uintptr_t candidate = reinterpret_cast<const uintptr_t*>(sp)[i];
         for (int m = 0; m < moduleCount; m++) {
             if (candidate < modules[m].start || candidate >= modules[m].end)

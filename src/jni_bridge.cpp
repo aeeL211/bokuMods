@@ -22,8 +22,10 @@ jclass unityPlayer() { return playerClass; }
 
 void cacheUnityPlayer(JNIEnv* env) {
     jclass unity = env->FindClass("com.unity3d.player.UnityPlayer");
-    if (unity)
+    if (unity) {
         playerClass = static_cast<jclass>(env->NewGlobalRef(unity));
+        env->DeleteLocalRef(unity);
+    }
     if (env->ExceptionCheck())
         env->ExceptionClear();
 }
