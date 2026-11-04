@@ -60,6 +60,7 @@ Field guestAccount = {};
 Field accountName = {};
 Field playerPhy = {};
 Field multiTransfer = {};
+Field multiChat = {};
 Field transferPipe = {};
 Field transferHost = {};
 Field multiDisconnect = {};
@@ -88,8 +89,7 @@ struct KickAll {
     double next;
     int sent;
     int pass;
-    void* multi;
-    void* chat;
+    void* room;
     char done[kMaxPlayers][kKeyChars];
     int doneCount;
 };
@@ -303,7 +303,7 @@ void rememberKicked(const char* key) {
 // already left cannot leave a stale pointer behind.
 bool nextKickTarget(Session& s, Slot& out) {
     Slot slots[kMaxPlayers];
-    int n = collectPlayers(kickAll.chat, s.key, slots);
+    int n = collectPlayers(s.chat, s.key, slots);
     void* host = hostKeyOf(s.multi);
     for (int i = 1; i < n; i++) {
         char key[kKeyChars];
@@ -331,13 +331,17 @@ void finishKickAll(Session& s) {
     reply(s, line);
 }
 
-// The heartbeat runs while a room is open, which is what paces the drain. One
-// quiet pass is retried once, so a dropped packet still ends with an empty room.
+// The heartbeat runs while a room is open, which is what paces the drain. Every
+// tick reads the chat, the manager and the list again from the live room: the
+// chat object dies with the scene, so a stored one would dangle on the next join.
+// kickAll.room only ever compares as an identity, it is never read through.
 void kickAllTick(void* self) {
     if (!kickAll.active)
         return;
     void* manager = readPtr(self, guestManagerA);
-    if (readPtr(manager, managerMulti) != kickAll.multi) {
+    void* chat = readPtr(readPtr(manager, managerMulti), multiChat);
+    if (!chat || chat != kickAll.room) {
+        LOGI("Kickall stopped: room changed");
         kickAll.active = false;
         return;
     }
@@ -346,7 +350,7 @@ void kickAllTick(void* self) {
         return;
     kickAll.next = now + kKickGap;
     Session s;
-    if (!openSession(kickAll.chat, s)) {
+    if (!openSession(chat, s)) {
         LOGI("Kickall stopped: chat missing");
         kickAll.active = false;
         return;
@@ -523,6 +527,10 @@ void kickCommand(Session& s, int, char** argv) {
 // frame, so the command only arms the drain and the guest update kicks one guest
 // per tick. The log names every slot, so a room that keeps somebody says why.
 void kickAllCommand(Session& s, int, char**) {
+    if (!multiChat.field) {
+        reply(s, "Kickall tidak tersedia");
+        return;
+    }
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
     void* host = hostKeyOf(s.multi);
@@ -545,8 +553,7 @@ void kickAllCommand(Session& s, int, char**) {
     kickAll.sent = 0;
     kickAll.pass = 0;
     kickAll.doneCount = 0;
-    kickAll.multi = s.multi;
-    kickAll.chat = s.chat;
+    kickAll.room = s.chat;
     reply(s, "Menendang tamu satu per satu");
 }
 
@@ -796,6 +803,10 @@ bool resolveFields() {
     if (!resolveField(transferClass, "pipe", transferPipe) ||
         !resolveField(transferClass, "host", transferHost))
         return false;
+
+    // The drain re-reads the chat from the live room every tick, because the chat
+    // object is rebuilt on every join and a stored one would outlive it.
+    resolveField(fieldClass(managerMulti), "chat", multiChat);
 
     // The guest manager frame callback drives the timed shake, so its manager
     // pointer is resolved the same way as every other field.
