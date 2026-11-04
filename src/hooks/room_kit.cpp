@@ -25,7 +25,7 @@ using FnKirimHapus = void (*)(void*, void*, void*);
 
 constexpr int kMaksPemain = 16;
 constexpr int kMaksToken = 8;
-constexpr int kJumlahHalaman = 3;
+constexpr int kJumlahBagian = 3;
 constexpr size_t kUkuranBaris = 240;
 constexpr size_t kUkuranNama = 96;
 constexpr size_t kUkuranKunci = 16;
@@ -479,7 +479,7 @@ struct Perintah {
     const char* nama;
     int minArgumen;
     int maksArgumen;
-    int halaman;
+    int bagian;
     FnPenangan jalankan;
     const char* pemakaian;
 };
@@ -492,24 +492,24 @@ void perintahBantuan(Sesi&, int, char**);
 void perintahStatus(Sesi&, int, char**);
 void perintahLog(Sesi&, int, char**);
 
-// Halaman dikelompokkan menurut pekerjaan pemain: aksi room, informasi, lalu
+// Perintah dikelompokkan menurut pekerjaan pemain: aksi room, informasi, lalu
 // bantuan. Urutannya juga urutan yang dipakai /help saat mencetak semua baris.
 const Perintah daftarPerintah[] = {
     {"kick", 1, 1, 1, perintahTendang, "/kick <n> - tendang pemain nomor n"},
     {"kickall", 0, 0, 1, perintahTendangSemua, "/kickall - tendang semua tamu, host tetap"},
     {"list", 0, 0, 2, perintahDaftar, "/list - daftar pemain dan nomornya"},
-    {"status", 0, 0, 2, perintahStatus, "/status - kunci sendiri, host, dan jumlah pemain"},
+    {"status", 0, 0, 2, perintahStatus, "/status - kunci sendiri, host, jumlah pemain"},
     {"log", 0, 0, 2, perintahLog, "/log - lokasi berkas log sesi ini"},
-    {"menu", 0, 1, 3, perintahMenu, "/menu [1-3] - ringkasan atau satu halaman"},
-    {"help", 0, 1, 3, perintahBantuan, "/help [perintah] - penjelasan satu perintah"},
+    {"menu", 0, 0, 3, perintahMenu, "/menu - ringkasan semua perintah"},
+    {"help", 0, 1, 3, perintahBantuan, "/help [perintah] - penjelasan perintah"},
 };
 
 constexpr int kJumlahPerintah = sizeof(daftarPerintah) / sizeof(daftarPerintah[0]);
 
-const char* judulHalaman(int halaman) {
-    switch (halaman) {
+const char* judulBagian(int bagian) {
+    switch (bagian) {
     case 1:
-        return "Room";
+        return "Aksi room";
     case 2:
         return "Info";
     default:
@@ -517,12 +517,12 @@ const char* judulHalaman(int halaman) {
     }
 }
 
-// Ringkasan satu halaman menempelkan nama perintahnya pada satu baris, jadi
-// ketiga halaman tetap muat dalam satu bubble.
-void tambahNamaPerintah(char* baris, size_t ukuran, int halaman) {
+// Ringkasan satu bagian menempelkan nama perintahnya pada satu baris, jadi
+// ketiga bagian tetap muat dalam satu bubble.
+void tambahNamaPerintah(char* baris, size_t ukuran, int bagian) {
     size_t terpakai = strlen(baris);
     for (int i = 0; i < kJumlahPerintah; i++) {
-        if (daftarPerintah[i].halaman != halaman)
+        if (daftarPerintah[i].bagian != bagian)
             continue;
         int n = snprintf(baris + terpakai, ukuran - terpakai, " /%s", daftarPerintah[i].nama);
         if (n <= 0 || static_cast<size_t>(n) >= ukuran - terpakai)
@@ -644,59 +644,32 @@ void tulisRingkasan(Sesi& sesi) {
     Blok blok;
     aturUlangBlok(blok);
     char baris[kUkuranBaris];
-    snprintf(baris, sizeof(baris), "RoomKit - %d perintah dalam %d halaman", kJumlahPerintah,
-             kJumlahHalaman);
+    snprintf(baris, sizeof(baris), "RoomKit - %d perintah", kJumlahPerintah);
     tambahBlok(sesi, blok, baris);
-    for (int halaman = 1; halaman <= kJumlahHalaman; halaman++) {
-        snprintf(baris, sizeof(baris), "%s:", judulHalaman(halaman));
-        tambahNamaPerintah(baris, sizeof(baris), halaman);
+    for (int bagian = 1; bagian <= kJumlahBagian; bagian++) {
+        snprintf(baris, sizeof(baris), "%s:", judulBagian(bagian));
+        tambahNamaPerintah(baris, sizeof(baris), bagian);
         tambahBlok(sesi, blok, baris);
     }
     siramBlok(sesi, blok);
 }
 
-void tulisHalaman(Sesi& sesi, int halaman) {
-    Blok blok;
-    aturUlangBlok(blok);
-    char baris[kUkuranBaris];
-    snprintf(baris, sizeof(baris), "RoomKit %d/%d - %s", halaman, kJumlahHalaman,
-             judulHalaman(halaman));
-    tambahBlok(sesi, blok, baris);
-    for (int i = 0; i < kJumlahPerintah; i++) {
-        if (daftarPerintah[i].halaman == halaman)
-            tambahBlok(sesi, blok, daftarPerintah[i].pemakaian);
-    }
-    if (halaman < kJumlahHalaman)
-        snprintf(baris, sizeof(baris), "Halaman berikutnya: /menu %d", halaman + 1);
-    else
-        snprintf(baris, sizeof(baris), "Detail perintah: /help <perintah>");
-    tambahBlok(sesi, blok, baris);
-    siramBlok(sesi, blok);
-}
-
-// Tanpa angka, ringkasan semua halaman muat dalam satu bubble. Dengan angka,
-// hanya halaman itu yang dicetak beserta penunjuk halaman berikutnya.
-void perintahMenu(Sesi& sesi, int argc, char** argv) {
-    if (argc == 0) {
-        tulisRingkasan(sesi);
-        return;
-    }
-    int halaman = 0;
-    if (!uraiInt(argv[0], halaman) || halaman < 1 || halaman > kJumlahHalaman) {
-        jawab(sesi, "Halaman menu 1 sampai 3");
-        return;
-    }
-    tulisHalaman(sesi, halaman);
-}
+// Semua perintah muat dalam satu bubble, jadi tidak ada halaman yang harus
+// dibuka satu per satu.
+void perintahMenu(Sesi& sesi, int, char**) { tulisRingkasan(sesi); }
 
 void perintahBantuan(Sesi& sesi, int argc, char** argv) {
     if (argc == 0) {
-        Blok blok;
-        aturUlangBlok(blok);
-        tambahBlok(sesi, blok, "RoomKit - bantuan perintah");
-        for (int i = 0; i < kJumlahPerintah; i++)
-            tambahBlok(sesi, blok, daftarPerintah[i].pemakaian);
-        siramBlok(sesi, blok);
+        for (int bagian = 1; bagian <= kJumlahBagian; bagian++) {
+            Blok blok;
+            aturUlangBlok(blok);
+            tambahBlok(sesi, blok, judulBagian(bagian));
+            for (int i = 0; i < kJumlahPerintah; i++) {
+                if (daftarPerintah[i].bagian == bagian)
+                    tambahBlok(sesi, blok, daftarPerintah[i].pemakaian);
+            }
+            siramBlok(sesi, blok);
+        }
         return;
     }
     for (int i = 0; i < kJumlahPerintah; i++) {

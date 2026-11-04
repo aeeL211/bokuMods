@@ -69,7 +69,7 @@ Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat roo
 sendiri, di sisi kiri seperti pesan yang diterima, dengan nama pemain sendiri sebagai pengirim,
 dan kotak chat langsung dikosongkan. Satu jawaban tampil dalam satu bubble, dan beberapa baris
 jawaban digabung ke dalam bubble itu dengan pemisah baris baru, jadi `/list`, `/status`, dan
-satu halaman `/menu` terbaca sebagai satu pesan. Jawaban yang terlalu panjang dipotong menjadi
+satu jawaban `/menu` terbaca sebagai satu pesan. Jawaban yang terlalu panjang dipotong menjadi
 beberapa bubble pendek supaya tingginya tidak melebihi panel chat. Kalau objek pesan game tidak
 tersedia, jawaban tampil sebagai toast. Teks yang diawali `/` tapi bukan perintah yang dikenal
 tetap terkirim sebagai chat biasa.
@@ -78,22 +78,19 @@ Pemain disebut dengan nomor, bukan nama. `#1` selalu pemain sendiri, pemain lain
 `#3`, dan seterusnya. Nomor mengikuti daftar tamu room, jadi bisa bergeser kalau ada pemain
 masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 
-| Perintah | Halaman | Fungsi |
+| Perintah | Bagian | Fungsi |
 |---|---|---|
-| `/kick <n>` | 1 | keluarkan pemain nomor n dari room; host tidak bisa ditendang |
-| `/kickall` | 1 | keluarkan semua tamu, host dan diri sendiri tetap di room |
-| `/list` | 2 | daftar pemain dan nomornya, `#1` adalah diri sendiri |
-| `/status` | 2 | kunci sendiri, kunci host, status host, jumlah pemain |
-| `/log` | 2 | lokasi berkas log sesi ini |
-| `/menu [1-3]` | 3 | ringkasan semua halaman, atau satu halaman |
-| `/help [perintah]` | 3 | penjelasan satu perintah, atau semua tanpa argumen |
+| `/kick <n>` | Aksi room | keluarkan pemain nomor n dari room; host tidak bisa ditendang |
+| `/kickall` | Aksi room | keluarkan semua tamu, host dan diri sendiri tetap di room |
+| `/list` | Info | daftar pemain dan nomornya, `#1` adalah diri sendiri |
+| `/status` | Info | kunci sendiri, kunci host, status host, jumlah pemain |
+| `/log` | Info | lokasi berkas log sesi ini |
+| `/menu` | Bantuan | ringkasan semua perintah dalam satu bubble |
+| `/help [perintah]` | Bantuan | penjelasan satu perintah, atau semua per bagian |
 
-Halaman 1 berisi aksi room, halaman 2 berisi informasi, dan halaman 3 berisi bantuan. `/menu`
-tanpa angka mencetak ringkasan ketiganya dalam satu bubble: satu baris judul, lalu satu baris per
-halaman berisi nama perintahnya. `/menu 2` mencetak halaman itu saja dengan judul
-`RoomKit 2/3 - Info` dan penunjuk halaman berikutnya di baris terakhir; halaman 3 menunjuk ke
-`/help`. `/help` tanpa argumen mencetak semua baris bantuan, dan `/help kick` hanya baris
-perintah itu.
+`/menu` mencetak satu bubble: satu baris judul, lalu satu baris per bagian berisi nama
+perintahnya. `/help` tanpa argumen mencetak rincian tiap bagian sebagai bubble sendiri, sedangkan
+`/help kick` hanya baris perintah itu.
 
 Paket kick dikirim memakai kunci host room, jadi klien lain menerimanya sebagai perintah dari
 host. Perintah hanya berlaku di room yang sedang dimasuki, dan tamu tetap bisa memakai `/kick`
@@ -101,7 +98,7 @@ dan `/kickall`. `/kick` yang menyasar nomor host dijawab `Host tidak bisa ditend
 menjawab `Menendang tamu satu per satu`, lalu menendang satu tamu tiap 0,25 detik, karena
 beberapa paket dalam satu frame hanya yang pertama yang sampai.
 
-Argumen `/kick` dan `/menu` harus angka. Teks yang tidak terbaca sebagai angka
+Argumen `/kick` harus angka. Teks yang tidak terbaca sebagai angka
 ditolak dengan jawaban di chat, jadi salah ketik tidak menjadi nomor atau durasi lain.
 
 ## Pemasangan
