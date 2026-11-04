@@ -59,8 +59,9 @@ progres terasa lambat, lewat hook pada method IL2CPP. File game tidak diubah.
 
 Ketik perintah di kotak chat room, lalu kirim lewat tombol kirim atau aksi kirim di keyboard.
 Baris perintah tidak pernah sampai ke pemain lain: jawabannya muncul di chat room perangkat
-sendiri sebagai baris dari diri sendiri, dan kotak chat langsung dikosongkan. Jawaban memakai
-bahasa Indonesia, sedangkan nama perintahnya tetap bahasa Inggris. Satu jawaban tampil dalam satu
+sendiri, di sisi kiri seperti pesan yang diterima, dengan nama pemain sendiri sebagai pengirim,
+dan kotak chat langsung dikosongkan. Jawaban memakai bahasa Indonesia, sedangkan nama perintahnya
+tetap bahasa Inggris. Satu jawaban tampil dalam satu
 bubble, dan beberapa baris jawaban digabung ke dalam bubble itu dengan pemisah baris baru, jadi
 `/list`, `/status`, dan satu halaman `/menu` terbaca sebagai satu pesan, bukan tumpukan bubble
 satu baris. Jawaban yang terlalu panjang dipotong menjadi beberapa bubble pendek supaya tingginya
@@ -142,8 +143,9 @@ pembuat mod, misalnya `Boku Boku 1.0.317 (code 317)` dan
   RAM; kalau perangkat kehabisan memori saat memuat world raksasa, game tetap bisa menutup
   dirinya sendiri.
 - Isi pesan pribadi hanya versi teks; pesan suara pribadi tidak ditampilkan. Kalau pengirim
-  sudah keluar room saat pesan masuk, chat room menolak nama itu dan hanya log yang mencatat.
-  Setiap DM yang tampil juga bisa memicu bunyi notifikasi chat.
+  sudah keluar room saat pesan masuk, namanya tidak bisa ditampilkan, jadi pesan itu hanya
+  dicatat di log dan tidak muncul di chat room. Setiap DM yang tampil juga bisa memicu bunyi
+  notifikasi chat.
 - Sensor kata hanya dilewati di aplikasi yang memakai mod; klien tanpa mod tetap menyaring kata
   yang dikirim maupun diterimanya.
 - Gunakan di akun sendiri; mod ini bisa melanggar ketentuan layanan game.

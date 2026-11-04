@@ -41,8 +41,10 @@ void* worker(void*) {
         return nullptr;
     }
     // Unity installs its own handlers during startup, so take over only after it
-    // has finished and chain back to it from the crash handler.
+    // has finished and chain back to it from the crash handler. The probes are
+    // installed after the module table they are resolved through is snapshotted.
     installCrashLog();
+    installCrashProbes();
     LOGI("IL2CPP API bound");
 
     void* dom = nullptr;

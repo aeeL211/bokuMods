@@ -17,6 +17,7 @@
 #include <cstring>
 #include <ctime>
 
+#include "hook.h"
 #include "jni_bridge.h"
 
 #ifdef BOKU_LOG
@@ -243,7 +244,8 @@ struct SigSlot {
 // Return addresses on the crashing stack name the caller chain, but resolving
 // them with dladdr() would take the linker lock in a process that is already
 // broken. The module ranges are therefore snapshotted once, before any crash,
-// and the handler only compares numbers.
+// and the handler only compares numbers. Only executable segments are kept, so
+// a data word that happens to sit in a loaded module is not read as code.
 struct Module {
     const char* name;
     uintptr_t start;
@@ -263,7 +265,7 @@ int gatherModule(struct dl_phdr_info* info, size_t, void*) {
     uintptr_t end = 0;
     for (int i = 0; i < info->dlpi_phnum; i++) {
         const ElfW(Phdr)& ph = info->dlpi_phdr[i];
-        if (ph.p_type != PT_LOAD)
+        if (ph.p_type != PT_LOAD || !(ph.p_flags & PF_X))
             continue;
         uintptr_t lo = info->dlpi_addr + ph.p_vaddr;
         uintptr_t hi = lo + ph.p_memsz;
@@ -280,6 +282,51 @@ int gatherModule(struct dl_phdr_info* info, size_t, void*) {
     modules[moduleCount].end = end;
     moduleCount++;
     return 0;
+}
+
+// The caller of abort() and __stack_chk_fail() is recorded by the probes below,
+// because the PC of the signal itself only ever lands inside libc and the frame
+// scan has no frame pointers to follow. A non-zero value is resolved through the
+// same module table, so the next SIGABRT names the code that gave up.
+std::atomic<uintptr_t> abortCaller{0};
+std::atomic<uintptr_t> stackCheckCaller{0};
+void* abortOriginal = nullptr;
+void* stackCheckOriginal = nullptr;
+
+bool writeCodeFrame(int fd, const char* clock, const char* label, uintptr_t address) {
+    for (int m = 0; m < moduleCount; m++) {
+        if (address < modules[m].start || address >= modules[m].end)
+            continue;
+        char line[512];
+        int n = snprintf(line, sizeof(line), "[%s] ERROR CRASH %s %s+0x%lx\n", clock, label,
+                         modules[m].name, static_cast<unsigned long>(address - modules[m].start));
+        if (n > 0 && fd >= 0)
+            write(fd, line, static_cast<size_t>(n));
+        return true;
+    }
+    return false;
+}
+
+using FatalFn = void (*)(void);
+
+// Unhandled exceptions, failed assertions and heap checks all end in abort(),
+// so the caller identifies the component that killed the process.
+void abortProbe() {
+    abortCaller.store(reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
+    auto orig = reinterpret_cast<FatalFn>(abortOriginal);
+    if (orig)
+        orig();
+    _exit(127);
+}
+
+// The game's own code is built with the stack protector, so a smashed canary
+// names the function that wrote past its frame.
+void stackCheckProbe() {
+    stackCheckCaller.store(reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
+    auto orig = reinterpret_cast<FatalFn>(stackCheckOriginal);
+    if (orig)
+        orig();
+    _exit(127);
 }
 
 SigSlot sigSlots[] = {
@@ -318,22 +365,20 @@ void crashHandler(int sig, siginfo_t* info, void* context) {
     if (n > 0 && fd >= 0)
         write(fd, line, static_cast<size_t>(n));
 
-    // Only words that fall inside a known module are printed, so heap values
-    // and stale stack data stay out of the log.
+    // A probe knows where abort() was called from, which is the only frame that
+    // matters when IL2CPP or a C++ runtime decides to end the process.
+    writeCodeFrame(fd, clock, "abort caller", abortCaller.load(std::memory_order_relaxed));
+    writeCodeFrame(fd, clock, "stack check caller",
+                   stackCheckCaller.load(std::memory_order_relaxed));
+
+    // Only words that fall inside an executable module segment are printed, so
+    // heap values, module data and stale stack words stay out of the log.
     uintptr_t sp = static_cast<uintptr_t>(uc->uc_mcontext.sp);
     int shown = 0;
     for (int i = 0; i < 512 && shown < 16; i++) {
         uintptr_t candidate = reinterpret_cast<const uintptr_t*>(sp)[i];
-        for (int m = 0; m < moduleCount; m++) {
-            if (candidate < modules[m].start || candidate >= modules[m].end)
-                continue;
-            n = snprintf(line, sizeof(line), "[%s] ERROR CRASH frame %s+0x%lx\n", clock,
-                         modules[m].name, static_cast<unsigned long>(candidate - modules[m].start));
-            if (n > 0 && fd >= 0)
-                write(fd, line, static_cast<size_t>(n));
+        if (writeCodeFrame(fd, clock, "frame", candidate))
             shown++;
-            break;
-        }
     }
     for (SigSlot& slot : sigSlots) {
         if (slot.sig == sig) {
@@ -429,6 +474,16 @@ void installCrashLog() {
         sigemptyset(&action.sa_mask);
         sigaction(slot.sig, &action, &slot.prev);
     }
+}
+
+// Both probes hook libc directly, which no target names, so each install
+// failure only leaves that one frame out of the next crash block.
+void installCrashProbes() {
+    void* abortAddr = dlsym(RTLD_DEFAULT, "abort");
+    installProbeHook(abortAddr, reinterpret_cast<void*>(abortProbe), &abortOriginal, "abort");
+    void* stackCheckAddr = dlsym(RTLD_DEFAULT, "__stack_chk_fail");
+    installProbeHook(stackCheckAddr, reinterpret_cast<void*>(stackCheckProbe), &stackCheckOriginal,
+                     "__stack_chk_fail");
 }
 
 #else

@@ -50,6 +50,9 @@ Field inputText = {};
 Field chatMsg = {};
 Field msgSender = {};
 Field senderSelf = {};
+Field senderOther = {};
+Field chatText = {};
+Field textMe = {};
 Field chatUi = {};
 Field chatMeasure = {};
 Field labelMaxLines = {};
@@ -297,11 +300,27 @@ void liftMsgLabel(void* chat) {
     writeInt(label, labelMaxLines, 0);
 }
 
-// The room chat draws a line only when its sender id equals _msg.sender.self,
-// and it labels a self line itself, so the body is the whole text. The bubble is
-// one NGUI label, and NGUI breaks its text at every newline, so a body can hold
-// several lines. Without a message object the answer falls back to a toast
-// instead of going silent.
+// The room chat draws a line only when its sender id equals _msg.sender.self or
+// _msg.sender.other. A line under the self id is drawn on the right, the side
+// the game keeps for the player's own messages, so an answer is added under the
+// "other" id instead and takes the left layout of a received message. The name
+// the game prints for this player travels with it, because the other layout
+// labels the bubble from the name it is given. A missing field keeps the self
+// line. The bubble is one NGUI label, and NGUI breaks its text at every newline,
+// so a body can hold several lines. Without a message object the answer falls
+// back to a toast instead of going silent.
+int32_t replySender(Session& s) {
+    int32_t other = readInt(readPtr(readPtr(s.chat, chatMsg), msgSender), senderOther);
+    return other > 0 && other != s.senderId ? other : s.senderId;
+}
+
+void* replyName(Session& s) {
+    void* me = readPtr(readPtr(s.chat, chatText), textMe);
+    if (me && stringLength(me) > 0)
+        return me;
+    return s.key ? s.key : utf16Of("");
+}
+
 void reply(Session& s, const char* text) {
     auto add = reinterpret_cast<AddTextFn>(target(T_CHAT_MSG_ADD).addr);
     if (!s.canReply || !add) {
@@ -309,12 +328,12 @@ void reply(Session& s, const char* text) {
         return;
     }
     void* body = utf16Of(text);
-    void* name = s.key ? s.key : utf16Of("");
+    void* name = replyName(s);
     if (!body || !name) {
         toast(text);
         return;
     }
-    add(s.chat, s.senderId, name, -1, 0, false, body, target(T_CHAT_MSG_ADD).method);
+    add(s.chat, replySender(s), name, -1, 0, false, body, target(T_CHAT_MSG_ADD).method);
     if (strchr(text, '\n'))
         liftMsgLabel(s.chat);
 }
@@ -937,8 +956,15 @@ bool resolveFields() {
         !resolveField(fieldClass(disconnectState), "host", disconnectHost))
         LOGE("Close fields missing; /close skips the leave");
     if (resolveField(classOf("Net__Multi__Chat"), "_msg", chatMsg) &&
-        resolveField(fieldClass(chatMsg), "sender", msgSender))
+        resolveField(fieldClass(chatMsg), "sender", msgSender)) {
         resolveField(fieldClass(msgSender), "self", senderSelf);
+        resolveField(fieldClass(msgSender), "other", senderOther);
+    }
+
+    // The name the game prints for this player, used when an answer is added
+    // under the "other" sender id so it keeps the left layout.
+    if (resolveField(classOf("Net__Multi__Chat"), "_text", chatText))
+        resolveField(fieldClass(chatText), "me", textMe);
 
     // The template label that measures every bubble, used to lift its line cap
     // before the first multi-line answer. A missing field only leaves the cap.

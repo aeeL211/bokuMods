@@ -8,6 +8,10 @@ void logPrint(char level, const char* fmt, ...);
 void logOpenFile();
 void installCrashLog();
 
+// Records the caller of abort() and __stack_chk_fail() so the next SIGABRT names
+// the code that decided to kill the process. Call once ShadowHook is up.
+void installCrashProbes();
+
 // Full path of the file this session writes, or nullptr before it is open.
 const char* logFilePath();
 
@@ -18,6 +22,7 @@ const char* logFilePath();
 
 inline void logOpenFile() {}
 inline void installCrashLog() {}
+inline void installCrashProbes() {}
 inline const char* logFilePath() { return nullptr; }
 
 #define LOGI(...) ((void)0)

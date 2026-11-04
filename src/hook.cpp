@@ -39,3 +39,17 @@ bool installHook(Target& t, void* replacement) {
 }
 
 int installedHooks() { return installedCount; }
+
+bool installProbeHook(void* addr, void* replacement, void** original, const char* name) {
+    if (!addr) {
+        LOGE("Probe not found: %s", name);
+        return false;
+    }
+    void* stub = shadowhook_hook_func_addr(addr, replacement, original);
+    if (!stub) {
+        int e = shadowhook_get_errno();
+        LOGE("Probe failed: %s (error %d, %s)", name, e, shadowhook_to_errmsg(e));
+        return false;
+    }
+    return true;
+}

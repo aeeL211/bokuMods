@@ -75,9 +75,10 @@ bool sameText(void* a, void* b) {
     return true;
 }
 
-// A private message carries the receiver's key, not the display name. The
-// guest list is keyed the same way, so the name is looked up there.
-void* receiverName(void* self, void* receiver) {
+// A private message carries keys, not display names. The guest list is keyed the
+// same way, so a name is looked up there; an unknown key means the message is
+// from outside this room and cannot be labelled.
+void* guestName(void* self, void* key) {
     void* manager = readPtr(self, managerField);
     void* guests = readPtr(manager, guestsField);
     void* items = readPtr(guests, guestItemsField);
@@ -92,7 +93,7 @@ void* receiverName(void* self, void* receiver) {
     char* data = arrayData(items);
     for (int32_t i = 0; i < count; i++) {
         void* guest = *reinterpret_cast<void**>(data + i * sizeof(void*));
-        if (!guest || !sameText(readPtr(guest, guestKeyField), receiver))
+        if (!guest || !sameText(readPtr(guest, guestKeyField), key))
             continue;
 
         void* account = readPtr(guest, guestAccountField);
@@ -144,7 +145,8 @@ void* localName(void* self) {
 // A private message is broadcast to every client and only the receiver check
 // drops it, so the text is already here. It is logged, then replayed into the
 // room chat under the sender's name with the receiver in the prefix and no
-// packet of its own.
+// packet of its own. The room chat resolves that name from the guest list, so a
+// sender who is not in this room is skipped instead of handed to the game.
 void receiveHook(void* self, void* receiver, void* user, void* text, void* method) {
     logPrivate(user, receiver, text);
 
@@ -160,8 +162,16 @@ void receiveHook(void* self, void* receiver, void* user, void* text, void* metho
     if (own && sameText(own, receiver))
         return;
 
+    void* sender = guestName(self, user);
+    if (!sender) {
+        char keyText[kMaxNameBytes];
+        LOGI("Private message skipped, sender not in room: %s",
+             utf8Of(user, keyText, sizeof(keyText)));
+        return;
+    }
+
     void* chat = readPtr(self, chatField);
-    void* line = privateLine(receiverName(self, receiver), text);
+    void* line = privateLine(guestName(self, receiver), text);
     if (chat && line)
         roomChat(chat, user, line, target(T_CHAT_MSG_RECEIVE).method);
 }
