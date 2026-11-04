@@ -1,5 +1,7 @@
 #include "hooks.h"
 
+#include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -558,6 +560,28 @@ int split(char* text, char** out, int max) {
     return n;
 }
 
+// A command argument is player input, so a trailing character or an overflow
+// is rejected instead of silently becoming a different number.
+bool parseInt(const char* text, int& out) {
+    char* end = nullptr;
+    errno = 0;
+    long value = strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < INT32_MIN || value > INT32_MAX)
+        return false;
+    out = static_cast<int>(value);
+    return true;
+}
+
+bool parseFloat(const char* text, float& out) {
+    char* end = nullptr;
+    errno = 0;
+    float value = strtof(text, &end);
+    if (errno != 0 || end == text || *end != '\0' || !std::isfinite(value))
+        return false;
+    out = value;
+    return true;
+}
+
 using Handler = void (*)(Session&, int, char**);
 
 struct Command {
@@ -617,7 +641,11 @@ void listCommand(Session& s, int, char**) {
 void kickCommand(Session& s, int, char** argv) {
     Slot slots[kMaxPlayers];
     int n = collectPlayers(s.chat, s.key, slots);
-    int index = atoi(argv[0]);
+    int index = 0;
+    if (!parseInt(argv[0], index)) {
+        reply(s, "Nomor pemain harus angka");
+        return;
+    }
     if (index < 1 || index > n) {
         reply(s, "Pemain nomor itu tidak ada");
         return;
@@ -714,7 +742,11 @@ void closeCommand(Session& s, int, char**) {
 // The seconds are capped so a typo cannot hammer every client with packets; the
 // timer itself is advanced by the guest update hook, never by a blocking loop.
 void shakeCommand(Session& s, int, char** argv) {
-    float seconds = strtof(argv[0], nullptr);
+    float seconds = 0.0f;
+    if (!parseFloat(argv[0], seconds)) {
+        reply(s, "Detik harus angka");
+        return;
+    }
     if (!(seconds > 0.0f)) {
         reply(s, "Detik harus lebih dari nol");
         return;
@@ -758,7 +790,11 @@ void menuCommand(Session& s, int argc, char** argv) {
     int from = 1;
     int to = kPageCount;
     if (argc > 0) {
-        int page = atoi(argv[0]);
+        int page = 0;
+        if (!parseInt(argv[0], page)) {
+            reply(s, "Halaman menu 1 sampai 3");
+            return;
+        }
         if (page < 1 || page > kPageCount) {
             reply(s, "Halaman menu 1 sampai 3");
             return;
