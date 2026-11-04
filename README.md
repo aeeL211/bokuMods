@@ -74,7 +74,7 @@ masuk atau keluar; cek ulang dengan `/list` sebelum memakai perintah lain.
 | `/kick <n>` | 1 | keluarkan pemain nomor n dari room |
 | `/kickall` | 1 | keluarkan semua pemain lain |
 | `/close` | 1 | tutup room lalu keluar; hanya host, tanpa konfirmasi |
-| `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 30 detik |
+| `/shake <detik>` | 2 | getarkan kamera paling kuat selama itu, paling lama 90 detik |
 | `/status` | 3 | key sendiri, key host, status host, jumlah pemain |
 | `/log` | 3 | lokasi file log sesi ini |
 | `/help <perintah\|-a>` | 3 | penjelasan satu perintah, atau semua dengan `-a` |

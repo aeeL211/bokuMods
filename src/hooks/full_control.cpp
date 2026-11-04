@@ -33,7 +33,7 @@ constexpr size_t kLineSize = 240;
 constexpr size_t kNameSize = 48;
 constexpr size_t kKeySize = 16;
 constexpr double kShakeGap = 0.2;
-constexpr float kShakeMax = 30.0f;
+constexpr float kShakeMax = 90.0f;
 
 // The stock explosion shake is the strongest the game configures: eight rounds
 // at the full camera offset. The camera hooks drop every stock call, so the
@@ -469,7 +469,7 @@ void closeCommand(Session& s, int, char**) {
 // timer itself is advanced by the guest update hook, never by a blocking loop.
 void shakeCommand(Session& s, int, char** argv) {
     float seconds = strtof(argv[0], nullptr);
-    if (seconds <= 0.0f) {
+    if (!(seconds > 0.0f)) {
         reply(s, "Detik harus lebih dari nol");
         return;
     }
