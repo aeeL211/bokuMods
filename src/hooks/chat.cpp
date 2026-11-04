@@ -57,24 +57,6 @@ void logPrivate(void* user, void* receiver, void* text) {
          utf8Of(text, bodyText, sizeof(bodyText)));
 }
 
-bool sameText(void* a, void* b) {
-    if (!a || !b)
-        return false;
-
-    int32_t len = stringLength(a);
-    if (len != stringLength(b))
-        return false;
-    const uint16_t* aChars = stringChars(a);
-    const uint16_t* bChars = stringChars(b);
-    if (!aChars || !bChars)
-        return false;
-    for (int32_t i = 0; i < len; i++) {
-        if (aChars[i] != bChars[i])
-            return false;
-    }
-    return true;
-}
-
 // A private message carries keys, not display names. The guest list is keyed the
 // same way, so a name is looked up there; an unknown key means the message is
 // from outside this room and cannot be labelled.
@@ -93,7 +75,7 @@ void* guestName(void* self, void* key) {
     char* data = arrayData(items);
     for (int32_t i = 0; i < count; i++) {
         void* guest = *reinterpret_cast<void**>(data + i * sizeof(void*));
-        if (!guest || !sameText(readPtr(guest, guestKeyField), key))
+        if (!guest || !sameString(readPtr(guest, guestKeyField), key))
             continue;
 
         void* account = readPtr(guest, guestAccountField);
@@ -159,7 +141,7 @@ void receiveHook(void* self, void* receiver, void* user, void* text, void* metho
         return;
 
     void* own = localName(self);
-    if (own && sameText(own, receiver))
+    if (own && sameString(own, receiver))
         return;
 
     void* sender = guestName(self, user);

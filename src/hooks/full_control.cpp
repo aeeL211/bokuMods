@@ -146,23 +146,6 @@ void readPoint(void* obj, const Field& f, float& x, float& y) {
     y = *reinterpret_cast<const float*>(base + sizeof(float));
 }
 
-bool sameText(void* a, void* b) {
-    if (!a || !b)
-        return false;
-    int32_t len = stringLength(a);
-    if (len != stringLength(b))
-        return false;
-    const uint16_t* aChars = stringChars(a);
-    const uint16_t* bChars = stringChars(b);
-    if (!aChars || !bChars)
-        return false;
-    for (int32_t i = 0; i < len; i++) {
-        if (aChars[i] != bChars[i])
-            return false;
-    }
-    return true;
-}
-
 // The answer text is UTF-8, because a player name is converted to UTF-8 before it
 // is put in a line, and the chat table stores UTF-16. Copying the bytes one to one
 // turned every non-ASCII name into broken symbols, so the text is decoded here.
@@ -277,7 +260,7 @@ int collectPlayers(void* chat, void* mine, Slot* out) {
         void* guest = *reinterpret_cast<void**>(data + i * sizeof(void*));
         if (!guest)
             continue;
-        if (sameText(readPtr(guest, guestKey), mine))
+        if (sameString(readPtr(guest, guestKey), mine))
             continue;
         out[n++].guest = guest;
     }
@@ -630,7 +613,7 @@ void listCommand(Session& s, int, char**) {
             snprintf(line, sizeof(line), "#%d kamu", i + 1);
         } else {
             stringOf(accountNameOf(slots[i].guest), name, sizeof(name), "?");
-            bool isHost = sameText(readPtr(slots[i].guest, guestKey), host);
+            bool isHost = sameString(readPtr(slots[i].guest, guestKey), host);
             snprintf(line, sizeof(line), "#%d %s%s", i + 1, name, isHost ? " (host)" : "");
         }
         blockAdd(s, block, line);
@@ -654,7 +637,7 @@ void kickCommand(Session& s, int, char** argv) {
         reply(s, "Tidak bisa menendang diri sendiri");
         return;
     }
-    if (sameText(readPtr(slots[index - 1].guest, guestKey), hostKeyOf(s.multi))) {
+    if (sameString(readPtr(slots[index - 1].guest, guestKey), hostKeyOf(s.multi))) {
         reply(s, "Host tidak bisa ditendang");
         return;
     }
@@ -678,7 +661,7 @@ void kickAllCommand(Session& s, int, char**) {
         char key[kKeyChars];
         if (!guestKeyText(slots[i].guest, key))
             continue;
-        if (sameText(readPtr(slots[i].guest, guestKey), host))
+        if (sameString(readPtr(slots[i].guest, guestKey), host))
             continue;
         snprintf(kickAll.keys[count], kKeyChars, "%s", key);
         LOGI("Kickall queue %d: %s", count + 1, key);
@@ -718,7 +701,7 @@ void startLeave(void* multi) {
 }
 
 void closeCommand(Session& s, int, char**) {
-    if (!sameText(s.key, hostKeyOf(s.multi))) {
+    if (!sameString(s.key, hostKeyOf(s.multi))) {
         reply(s, "Hanya host yang bisa menutup room");
         return;
     }
@@ -774,7 +757,7 @@ void statusCommand(Session& s, int, char**) {
     blockAdd(s, block, line);
     snprintf(line, sizeof(line), "Key host: %s", host);
     blockAdd(s, block, line);
-    blockAdd(s, block, sameText(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
+    blockAdd(s, block, sameString(s.key, hostKey) ? "Kamu host: ya" : "Kamu host: tidak");
     Slot slots[kMaxPlayers];
     snprintf(line, sizeof(line), "Pemain: %d", collectPlayers(s.chat, s.key, slots));
     blockAdd(s, block, line);

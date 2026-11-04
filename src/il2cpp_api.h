@@ -62,6 +62,8 @@ int32_t arrayLength(void* arr);
 char* arrayData(void* arr);
 int32_t stringLength(void* str);
 const uint16_t* stringChars(void* str);
+// Two IL2CPP strings compared by value; null on either side is never equal.
+bool sameString(void* a, void* b);
 void* newUtf16String(const uint16_t* chars, int32_t len);
 // IL2CPP text is UTF-16, but log lines and file paths are UTF-8.
 bool toUtf8(void* str, char* out, size_t size);

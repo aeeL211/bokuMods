@@ -184,6 +184,25 @@ const uint16_t* stringChars(void* str) {
     return api.stringChars(str);
 }
 
+bool sameString(void* a, void* b) {
+    if (!a || !b)
+        return false;
+    if (a == b)
+        return true;
+    int32_t len = stringLength(a);
+    if (len != stringLength(b))
+        return false;
+    const uint16_t* aChars = stringChars(a);
+    const uint16_t* bChars = stringChars(b);
+    if (!aChars || !bChars)
+        return false;
+    for (int32_t i = 0; i < len; i++) {
+        if (aChars[i] != bChars[i])
+            return false;
+    }
+    return true;
+}
+
 void* newUtf16String(const uint16_t* chars, int32_t len) {
     if (!api.stringNewUtf16)
         return nullptr;
