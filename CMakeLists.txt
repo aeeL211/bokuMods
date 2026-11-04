@@ -144,6 +144,17 @@ add_library(febrian SHARED
 target_include_directories(febrian PRIVATE src "${TARGETS_DIR}")
 add_dependencies(febrian targets_generated)
 
+# Every hook signature has to keep parameters it does not read, so unused
+# parameters are exempt; every other warning is fatal. The extra warnings catch
+# a silent comparison or shadowing mistake before it reaches the device.
+target_compile_options(febrian PRIVATE
+  -Wall
+  -Wextra
+  -Wshadow
+  -Wno-unused-parameter
+  -Werror
+)
+
 # Size and codegen: no exceptions, RTTI or unwind tables, and one section per
 # function and data item so the linker can drop what no hook reaches.
 target_compile_options(febrian PRIVATE
