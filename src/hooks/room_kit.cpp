@@ -1,7 +1,6 @@
 #include "hooks.h"
 
 #include <cerrno>
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -21,8 +20,6 @@ using FnKirimInput = void (*)(void*, void*);
 using FnKunci = void* (*)(void*, void*);
 using FnTendang = void (*)(void*, void*, void*);
 using FnBersihkan = void (*)(void*, void*);
-using FnKirimGetar = void (*)(void*, float, float, void*);
-using FnGetar = void (*)(void*, int32_t, float, void*);
 using FnTambahTeks = void (*)(void*, int32_t, void*, int32_t, int32_t, bool, void*, void*);
 using FnKirimHapus = void (*)(void*, void*, void*);
 
@@ -32,17 +29,9 @@ constexpr int kJumlahHalaman = 3;
 constexpr size_t kUkuranBaris = 240;
 constexpr size_t kUkuranNama = 96;
 constexpr size_t kUkuranKunci = 16;
-constexpr double kJedaGetar = 0.2;
-constexpr float kMaksGetar = 90.0f;
 constexpr double kJedaTendang = 0.25;
 constexpr double kJendelaTendang = 8.0;
 constexpr size_t kKarakterKunci = 40;
-
-// Getaran ledakan bawaan adalah yang terkuat yang dikonfigurasi game: delapan
-// putaran pada offset kamera penuh. Hook kamera membuang setiap panggilan
-// bawaan, jadi getaran berdurasi mengirim nilai ini langsung ke fungsi aslinya.
-constexpr int32_t kPutaranGetar = 8;
-constexpr float kOffsetGetar = 1.0f;
 
 Field fieldManajerChat = {};
 Field fieldInputChat = {};
@@ -61,7 +50,6 @@ Field fieldItemPesan = {};
 Field fieldJumlahPesan = {};
 Field fieldObjekPesan = {};
 Field fieldLabelPesan = {};
-Field fieldKameraManajer = {};
 Field fieldTamuManajer = {};
 Field fieldMultiManajer = {};
 Field fieldPemainManajer = {};
@@ -70,26 +58,11 @@ Field fieldUkuranTamu = {};
 Field fieldKunciTamu = {};
 Field fieldAkunTamu = {};
 Field fieldNamaAkun = {};
-Field fieldFisikPemain = {};
 Field fieldTransferMulti = {};
 Field fieldPipeTransfer = {};
-Field fieldHostTransfer = {};
-Field fieldPosisiFisik = {};
-Field fieldPosisiDunia = {};
 Field fieldManajerTamu = {};
 bool siap = false;
 bool barisSiap = false;
-
-// Getaran berdurasi menyimpan waktu mulai dan waktu kirim berikutnya pada jam
-// yang tidak bisa dijeda game, jadi frame yang lambat tidak memperpanjang durasi
-// yang diminta.
-struct Getar {
-    double berikut;
-    double akhir;
-    bool aktif;
-};
-
-Getar getar = {};
 
 // Paket tendang diberi jeda satu per detak. Antrean hanya menyimpan teks kunci
 // target yang diambil saat perintah berjalan, jadi tidak ada isinya yang
@@ -131,16 +104,6 @@ double sekarangDetik() {
     timespec ts = {};
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
-}
-
-void bacaTitik(void* objek, const Field& bidang, float& x, float& y) {
-    x = 0.0f;
-    y = 0.0f;
-    if (!objek || !bidang.field)
-        return;
-    const char* dasar = reinterpret_cast<const char*>(objek) + bidang.offset;
-    x = *reinterpret_cast<const float*>(dasar);
-    y = *reinterpret_cast<const float*>(dasar + sizeof(float));
 }
 
 // Teks jawaban berformat UTF-8, karena nama pemain diubah ke UTF-8 sebelum
@@ -233,10 +196,6 @@ void hentiSpoof() {
 
 void* pipeDari(void* multi) {
     return bacaPtr(bacaPtr(multi, fieldTransferMulti), fieldPipeTransfer);
-}
-
-void* hostDari(void* multi) {
-    return bacaPtr(bacaPtr(multi, fieldTransferMulti), fieldHostTransfer);
 }
 
 // Daftar tamu berisi pemain jarak jauh, jadi pemain lokal selalu slot satu dan
@@ -474,57 +433,6 @@ void detakTendangSemua(void* sendiri) {
         LOGE("Tendang gagal: tamu tidak punya kunci atau pipe");
 }
 
-// Hook kamera membuang kedua titik masuk bawaan, jadi separuh lokal dari sebuah
-// getaran berjalan lewat fungsi asli panggilan dua argumen.
-void terapkanGetar(void* kamera, int32_t putaran, float offset) {
-    auto fungsiGetar = reinterpret_cast<FnGetar>(target(T_SHAKE_NUM).orig);
-    if (fungsiGetar && kamera)
-        fungsiGetar(kamera, putaran, offset, target(T_SHAKE_NUM).method);
-}
-
-// Satu putaran getaran pada kekuatan terkuat game: kamera lokal digetarkan di
-// sini, dan paketnya menaruh kamera klien lain di titik yang sama.
-void getarSekali(Sesi& sesi) {
-    void* kamera = bacaPtr(sesi.manajer, fieldKameraManajer);
-    terapkanGetar(kamera, kPutaranGetar, kOffsetGetar);
-    void* host = hostDari(sesi.multi);
-    auto kirim = reinterpret_cast<FnKirimGetar>(target(T_EXPLOSION_SHAKE_SEND).addr);
-    if (!host || !kirim)
-        return;
-    float x = 0.0f;
-    float y = 0.0f;
-    bacaTitik(bacaPtr(bacaPtr(sesi.pemain, fieldFisikPemain), fieldPosisiFisik), fieldPosisiDunia,
-              x, y);
-    mulaiSpoof(sesi.multi);
-    kirim(host, x, y, target(T_EXPLOSION_SHAKE_SEND).method);
-    hentiSpoof();
-}
-
-// Manajer tamu ter-update setiap frame selama room terbuka, dan itulah detak
-// yang dibutuhkan getaran berdurasi; panel chat bisa ditutup di tengah getaran.
-void detakGetar(void* sendiri) {
-    if (!getar.aktif)
-        return;
-    double sekarang = sekarangDetik();
-    void* manajer = bacaPtr(sendiri, fieldManajerTamu);
-    void* kamera = bacaPtr(manajer, fieldKameraManajer);
-    if (sekarang >= getar.akhir) {
-        getar.aktif = false;
-        terapkanGetar(kamera, 0, 0.0f);
-        return;
-    }
-    if (sekarang < getar.berikut)
-        return;
-    getar.berikut = sekarang + kJedaGetar;
-    Sesi sesi = {};
-    sesi.manajer = manajer;
-    sesi.multi = bacaPtr(manajer, fieldMultiManajer);
-    sesi.pemain = bacaPtr(manajer, fieldPemainManajer);
-    if (!sesi.multi || !sesi.pemain)
-        return;
-    getarSekali(sesi);
-}
-
 void hookUpdate(void* sendiri, void* metode) {
     auto asli = reinterpret_cast<void (*)(void*, void*)>(target(T_GUEST_UPDATE).orig);
     if (asli)
@@ -533,7 +441,6 @@ void hookUpdate(void* sendiri, void* metode) {
     // berpasangan, dan penggantian yang bocor membuat setiap pencarian kunci
     // berikutnya dijawab dengan kunci host.
     hentiSpoof();
-    detakGetar(sendiri);
     detakTendangSemua(sendiri);
 }
 
@@ -566,16 +473,6 @@ bool uraiInt(const char* teks, int& keluaran) {
     return true;
 }
 
-bool uraiFloat(const char* teks, float& keluaran) {
-    char* akhir = nullptr;
-    errno = 0;
-    float nilai = strtof(teks, &akhir);
-    if (errno != 0 || akhir == teks || *akhir != '\0' || !std::isfinite(nilai))
-        return false;
-    keluaran = nilai;
-    return true;
-}
-
 using FnPenangan = void (*)(Sesi&, int, char**);
 
 struct Perintah {
@@ -590,7 +487,6 @@ struct Perintah {
 void perintahDaftar(Sesi&, int, char**);
 void perintahTendang(Sesi&, int, char**);
 void perintahTendangSemua(Sesi&, int, char**);
-void perintahGetar(Sesi&, int, char**);
 void perintahMenu(Sesi&, int, char**);
 void perintahBantuan(Sesi&, int, char**);
 void perintahStatus(Sesi&, int, char**);
@@ -601,7 +497,6 @@ void perintahLog(Sesi&, int, char**);
 const Perintah daftarPerintah[] = {
     {"kick", 1, 1, 1, perintahTendang, "/kick <n> - tendang pemain nomor n"},
     {"kickall", 0, 0, 1, perintahTendangSemua, "/kickall - tendang semua tamu, host tetap"},
-    {"shake", 1, 1, 1, perintahGetar, "/shake <detik> - getarkan kamera paling kuat"},
     {"list", 0, 0, 2, perintahDaftar, "/list - daftar pemain dan nomornya"},
     {"status", 0, 0, 2, perintahStatus, "/status - kunci sendiri, host, dan jumlah pemain"},
     {"log", 0, 0, 2, perintahLog, "/log - lokasi berkas log sesi ini"},
@@ -716,29 +611,6 @@ void perintahTendangSemua(Sesi& sesi, int, char**) {
     tendangSemua.indeksBerikut = 0;
     tendangSemua.jumlah = terisi;
     jawab(sesi, "Menendang tamu satu per satu");
-}
-
-// Detiknya dibatasi supaya salah ketik tidak menghantam setiap klien dengan
-// paket; timer-nya sendiri dimajukan hook update tamu, tidak pernah oleh loop
-// yang memblokir.
-void perintahGetar(Sesi& sesi, int, char** argv) {
-    float detik = 0.0f;
-    if (!uraiFloat(argv[0], detik)) {
-        jawab(sesi, "Detik harus angka");
-        return;
-    }
-    if (!(detik > 0.0f)) {
-        jawab(sesi, "Detik harus lebih dari nol");
-        return;
-    }
-    if (detik > kMaksGetar)
-        detik = kMaksGetar;
-    getar.aktif = true;
-    getar.berikut = 0.0;
-    getar.akhir = sekarangDetik() + detik;
-    char baris[kUkuranBaris];
-    snprintf(baris, sizeof(baris), "Getar kamera paling kuat %.1f detik", detik);
-    jawab(sesi, baris);
 }
 
 void perintahStatus(Sesi& sesi, int, char**) {
@@ -953,9 +825,6 @@ bool cariFieldRoomKit() {
         !cariField(kelasField(fieldInputChat), "text", fieldTeksInput))
         return false;
     void* kelasManajer = kelasField(fieldManajerChat);
-    // Kamera hanya dipakai untuk separuh lokal /shake, jadi field yang tidak ada
-    // tidak boleh mematikan seluruh rangkaian perintah.
-    cariField(kelasManajer, "camera", fieldKameraManajer);
     if (!cariField(kelasManajer, "guests", fieldTamuManajer) ||
         !cariField(kelasManajer, "multi", fieldMultiManajer) ||
         !cariField(kelasManajer, "player", fieldPemainManajer))
@@ -972,22 +841,13 @@ bool cariFieldRoomKit() {
         return false;
     if (!cariField(kelasField(fieldAkunTamu), "user_Name", fieldNamaAkun))
         return false;
-    if (!cariField(kelasField(fieldPemainManajer), "phy", fieldFisikPemain))
-        return false;
-
-    if (!cariField(kelasField(fieldFisikPemain), "pos", fieldPosisiFisik))
-        return false;
-    if (!cariField(kelasField(fieldPosisiFisik), "world", fieldPosisiDunia))
-        return false;
-
     if (!cariField(kelasField(fieldMultiManajer), "transfer", fieldTransferMulti))
         return false;
     void* kelasTransfer = kelasField(fieldTransferMulti);
-    if (!cariField(kelasTransfer, "pipe", fieldPipeTransfer) ||
-        !cariField(kelasTransfer, "host", fieldHostTransfer))
+    if (!cariField(kelasTransfer, "pipe", fieldPipeTransfer))
         return false;
 
-    // Callback frame manajer tamu menggerakkan getaran berdurasi, jadi pointer
+    // Callback frame manajer tamu menggerakkan antrean /kickall, jadi pointer
     // manajernya dicari dengan cara yang sama seperti field lainnya.
     if (!cariField(kelasDari("Guest__Manager"), "a", fieldManajerTamu))
         return false;
@@ -1020,8 +880,7 @@ bool cariFieldRoomKit() {
 void pasangHookRoomKit() {
     siap = cariFieldRoomKit() && target(T_CHAT_SEND).addr && target(T_CHAT_CLEAR).addr &&
            target(T_INPUT_SEND).addr && target(T_PLAYER_KEY).addr && target(T_KICK_SEND).addr &&
-           target(T_EXPLOSION_SHAKE_SEND).addr && target(T_HOST_KEY).addr &&
-           target(T_GUEST_UPDATE).addr;
+           target(T_HOST_KEY).addr && target(T_GUEST_UPDATE).addr;
     if (!siap) {
         LOGE("Field RoomKit tidak ditemukan; perintah chat tidak aktif");
         return;

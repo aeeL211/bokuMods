@@ -87,5 +87,4 @@ T_CHAT_CLEAR|Net__Multi__Chat|Input_Field__Clear|0|
 T_INPUT_SEND|Net__Multi__Chat|Input__Send|0|
 T_KICK_SEND|Net__Multi__Transfer__Pipe|Host__Client__Connect__Kick__Send|1|
 T_GUEST_UPDATE|Guest__Manager|_Update|0|
-T_EXPLOSION_SHAKE_SEND|Net__Multi__Transfer__Host|Explosion__Camera_Shake__Send|1|
 T_HOST_KEY|Net__Multi|Host__Key|0|
