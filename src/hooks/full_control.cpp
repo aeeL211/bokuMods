@@ -737,15 +737,19 @@ void logCommand(Session& s, int, char**) {
 
 void menuCommand(Session& s, int argc, char** argv) {
     int from = 1;
-    int to = kPageCount;
-    if (argc > 0 && strcmp(argv[0], "-a")) {
-        int page = atoi(argv[0]);
-        if (page < 1 || page > kPageCount) {
-            reply(s, "Halaman menu 1 sampai 3, atau -a");
-            return;
+    int to = 1;
+    if (argc > 0) {
+        if (!strcmp(argv[0], "-a")) {
+            to = kPageCount;
+        } else {
+            int page = atoi(argv[0]);
+            if (page < 1 || page > kPageCount) {
+                reply(s, "Halaman menu 1 sampai 3, atau -a");
+                return;
+            }
+            from = page;
+            to = page;
         }
-        from = page;
-        to = page;
     }
     char header[kLineSize];
     for (int page = from; page <= to; page++) {
